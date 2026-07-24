@@ -14,7 +14,8 @@
     "demo:solve": "tsx src/demo/runProblemSolving.ts",
     "demo:concurrency": "tsx src/demo/runConcurrency.ts",
     "server": "tsx src/server/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
@@ -25,6 +26,7 @@
   "devDependencies": {
     "@types/node": "^22.10.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.9"
   }
 }

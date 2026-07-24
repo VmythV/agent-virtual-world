@@ -20,12 +20,16 @@ async function main() {
   const reconciled = worldStore.failStaleRunning("服务重启，运行中的世界已中断");
   if (reconciled > 0) console.log(`Reconciled ${reconciled} stale running world(s) to failed on startup`);
 
-  // No maxCalls here (unlike the one-shot demo script): this pool lives for
-  // the server's whole lifetime, so a lifetime call budget would eventually
-  // lock every CLI agent out permanently. Per-call cost is still bounded by
-  // each call's own --max-budget-usd; a resettable (e.g. daily) budget is
-  // tracked as an open item in docs/architecture.md.
-  const cliPool = new RuntimePool({ maxConcurrent: 3, timeoutMs: 90_000 });
+  // A resettable (hourly) budget rather than a lifetime one, so a long-lived
+  // server bounds CLI-agent cost/runaways without ever permanently locking
+  // agents out. Per-call cost is still capped by each call's own
+  // --max-budget-usd. Tune via env for different deployments.
+  const cliPool = new RuntimePool({
+    maxConcurrent: Number(process.env.CLI_MAX_CONCURRENT ?? 3),
+    timeoutMs: Number(process.env.CLI_TIMEOUT_MS ?? 90_000),
+    maxCallsPerWindow: Number(process.env.CLI_MAX_CALLS_PER_HOUR ?? 500),
+    windowMs: 60 * 60 * 1000,
+  });
 
   const app = await buildServer({ eventLog, agentStore, worldStore, cliPool });
 

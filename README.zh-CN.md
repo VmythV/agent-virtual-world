@@ -97,7 +97,8 @@ flowchart TB
 npm install
 npm run typecheck
 
-# 2) 跑一个离线 demo（无需任何 API key）
+# 2) 跑测试，或跑一个离线 demo（无需任何 API key）
+npm test
 npm run demo:werewolf
 
 # 3) 启动后端（REST :4000 + WebSocket）

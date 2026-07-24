@@ -161,4 +161,5 @@ idle → thinking → speaking/acting → idle
 - **沙箱隔离的安全边界**：MVP 阶段的受限工作目录方案是否足够，需要在引入 CliAgentAdapter 时重新评估。
   - 已验证的副作用：子进程 `cwd` 是每次调用新建的临时目录，不是项目目录，所以 `custom` 预设里 `command`/`args` 引用本地脚本必须给绝对路径。管理侧 Agent CRUD 表单（Phase 5）在配置 `custom` CLI 命令时应该提示或校验这一点，避免用户填相对路径导致运行时才报错。
 - **3D 展示对无空间场景的适配成本**：辩论/讨论组这类场景的「站桩发言」表现是否足够传达决策过程，可能需要辅以字幕/气泡等 2D 叠加信息。
-- **长驻服务的 CLI 调用预算**：`RuntimePool` 目前的 `maxCalls` 是「进程生命周期内」的一次性预算，适合一次性 demo 脚本，但服务端长期运行后会把 CLI Agent 永久锁死，需要改成可重置（如按小时/按天）的预算窗口，或接入更完整的计费/告警系统。
+- ~~**长驻服务的 CLI 调用预算**：`RuntimePool` 的 `maxCalls` 是一次性预算，服务端长期运行会把 CLI Agent 永久锁死。~~ 已实现可重置的窗口预算：`RuntimePool` 支持 `maxCallsPerWindow` + `windowMs`，每个窗口滚动重置，服务端默认按小时 500 次（可用 `CLI_MAX_CALLS_PER_HOUR` 等环境变量调整），既兜底成本/失控又不会永久锁死。单次成本仍由每次调用的 `--max-budget-usd` 兜底。更完整的计费/告警系统仍是后续方向。
+- **运行控制与重启恢复**（已实现）：世界在内存里 fire-and-forget 运行，服务重启会遗留 `running` 世界；启动时 `WorldStore.failStaleRunning` 把它们对账成 `failed`。运行中的世界可经 `POST /api/worlds/:id/stop`（`AbortSignal` 协作式取消）终止，或 `DELETE /api/worlds/:id` 删除（连带清事件）。删除被 running 世界引用的 Agent 会 409。

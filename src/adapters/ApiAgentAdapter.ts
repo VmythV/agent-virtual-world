@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AgentAction, AgentAdapter, Observation } from "../core/types.js";
-import { expectedActionType } from "../core/protocol.js";
+import { buildPrompt, expectedActionType } from "../core/protocol.js";
 
 export interface ApiAgentAdapterConfig {
   agentId: string;
@@ -39,21 +39,4 @@ export class ApiAgentAdapter implements AgentAdapter {
 
     return { type: expectedActionType(observation), payload: { text } };
   }
-}
-
-function buildPrompt(observation: Observation): string {
-  const historyText = observation.history
-    .map((event) => `[${event.type}]${event.actorId ? ` ${event.actorId}:` : ""} ${JSON.stringify(event.payload)}`)
-    .join("\n");
-  const instructionText = observation.instruction ? `\n\n上帝指令: ${observation.instruction}` : "";
-
-  return [
-    `当前世界状态: ${JSON.stringify(observation.visibleState)}`,
-    "",
-    "历史事件:",
-    historyText || "(暂无)",
-    instructionText,
-    "",
-    "请给出你的发言内容（纯文本）。",
-  ].join("\n");
 }

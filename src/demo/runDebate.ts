@@ -1,18 +1,36 @@
 import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { EventLog } from "../core/eventLog.js";
 import type { AgentAdapter } from "../core/types.js";
 import { runWorld } from "../engine/scheduler.js";
 import { debateWorldTemplate, type DebateSide } from "../worldTemplates/debateWorldTemplate.js";
 import { ApiAgentAdapter } from "../adapters/ApiAgentAdapter.js";
 import { MockAgentAdapter } from "../adapters/MockAgentAdapter.js";
+import { CliAgentAdapter } from "../adapters/CliAgentAdapter.js";
+import { RuntimePool } from "../runtime/runtimePool.js";
 
 const useRealApi = Boolean(process.env.ANTHROPIC_API_KEY);
+const cliFixturePath = fileURLToPath(new URL("./fixtures/mockCliAgent.mjs", import.meta.url));
 
-function buildAgent(agentId: string, side: DebateSide): AgentAdapter {
+// Shared by every CLI-backed agent so the demo also exercises the
+// concurrency/timeout/budget controls from RuntimePool, not just the
+// happy-path process spawn.
+const cliPool = new RuntimePool({ maxConcurrent: 2, timeoutMs: 5_000, maxCalls: 20 });
+
+function buildLlmAgent(agentId: string, side: DebateSide): AgentAdapter {
   if (useRealApi) {
     return new ApiAgentAdapter({ agentId, systemPrompt: systemPromptFor(side) });
   }
   return new MockAgentAdapter({ agentId, responses: mockResponsesFor(agentId, side) });
+}
+
+function buildCliAgent(agentId: string): AgentAdapter {
+  return new CliAgentAdapter({
+    agentId,
+    command: process.execPath,
+    args: [cliFixturePath],
+    pool: cliPool,
+  });
 }
 
 function systemPromptFor(side: DebateSide): string {
@@ -38,15 +56,15 @@ async function main() {
   const eventLog = new EventLog("data/events.db");
 
   const agents = new Map<string, AgentAdapter>([
-    ["pro-1", buildAgent("pro-1", "pro")],
-    ["con-1", buildAgent("con-1", "con")],
-    ["judge-1", buildAgent("judge-1", "judge")],
+    ["pro-1", buildLlmAgent("pro-1", "pro")],
+    ["con-1", buildCliAgent("con-1")],
+    ["judge-1", buildLlmAgent("judge-1", "judge")],
   ]);
 
   console.log(
-    `Running debate world ${worldId} using ${
-      useRealApi ? "the live Anthropic API" : "mock adapters (set ANTHROPIC_API_KEY to use the real API)"
-    }\n`,
+    `Running debate world ${worldId}\n` +
+      `  pro-1, judge-1 -> ${useRealApi ? "live Anthropic API" : "mock adapter (set ANTHROPIC_API_KEY for the real API)"}\n` +
+      `  con-1          -> CliAgentAdapter (fixture CLI process, standing in for Claude Code / Codex CLI)\n`,
   );
 
   const events = await runWorld({
@@ -75,6 +93,9 @@ async function main() {
     `\n回放校验: 从 SQLite 读回 ${replay.length} 条事件，与运行时产生的事件${
       persistedCorrectly ? "完全一致 ✔" : "不一致 ✘"
     }`,
+  );
+  console.log(
+    `CliAgentAdapter 运行统计: ${JSON.stringify(cliPool.stats)} (调用次数/并发/排队情况，来自 RuntimePool)`,
   );
 
   eventLog.close();

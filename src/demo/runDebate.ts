@@ -2,42 +2,21 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { EventLog } from "../core/eventLog.js";
 import type { AgentAdapter } from "../core/types.js";
+import type { AgentConfig } from "../core/agentConfig.js";
+import { createAgentAdapter } from "../core/agentFactory.js";
 import { runWorld } from "../engine/scheduler.js";
 import { debateWorldTemplate, type DebateSide } from "../worldTemplates/debateWorldTemplate.js";
-import { ApiAgentAdapter } from "../adapters/ApiAgentAdapter.js";
-import { MockAgentAdapter } from "../adapters/MockAgentAdapter.js";
-import { CliAgentAdapter } from "../adapters/CliAgentAdapter.js";
 import { RuntimePool } from "../runtime/runtimePool.js";
 
 const useRealApi = Boolean(process.env.ANTHROPIC_API_KEY);
+const useMockCli = Boolean(process.env.USE_MOCK_CLI);
 const cliFixturePath = fileURLToPath(new URL("./fixtures/mockCliAgent.mjs", import.meta.url));
-
-// Shared by every CLI-backed agent so the demo also exercises the
-// concurrency/timeout/budget controls from RuntimePool, not just the
-// happy-path process spawn.
-const cliPool = new RuntimePool({ maxConcurrent: 2, timeoutMs: 5_000, maxCalls: 20 });
-
-function buildLlmAgent(agentId: string, side: DebateSide): AgentAdapter {
-  if (useRealApi) {
-    return new ApiAgentAdapter({ agentId, systemPrompt: systemPromptFor(side) });
-  }
-  return new MockAgentAdapter({ agentId, responses: mockResponsesFor(agentId, side) });
-}
-
-function buildCliAgent(agentId: string): AgentAdapter {
-  return new CliAgentAdapter({
-    agentId,
-    command: process.execPath,
-    args: [cliFixturePath],
-    pool: cliPool,
-  });
-}
 
 function systemPromptFor(side: DebateSide): string {
   if (side === "judge") {
-    return "你是一场辩论赛的裁判。根据双方发言给出简短总结，并判定获胜方。";
+    return "你是一场辩论赛的裁判。根据双方发言给出简短总结，并判定获胜方。只输出总结和判定，不要解释你的思考过程。";
   }
-  return `你是一场辩论赛的${side === "pro" ? "正方" : "反方"}辩手。针对辩题给出简短有力的发言，不要重复对方已经说过的论点。`;
+  return `你是一场辩论赛的${side === "pro" ? "正方" : "反方"}辩手。针对辩题给出简短有力的发言（不超过两句话），不要重复对方已经说过的论点，只输出发言内容本身。`;
 }
 
 function mockResponsesFor(agentId: string, side: DebateSide): string[] {
@@ -51,20 +30,60 @@ function mockResponsesFor(agentId: string, side: DebateSide): string[] {
   ];
 }
 
+/** pro-1/judge-1: real API when a key is set, otherwise a deterministic mock. */
+function llmAgentConfig(agentId: string, side: DebateSide): AgentConfig {
+  if (useRealApi) {
+    return { agentId, adapter: "api", systemPrompt: systemPromptFor(side) };
+  }
+  return { agentId, adapter: "mock", responses: mockResponsesFor(agentId, side) };
+}
+
+/**
+ * con-1: CLI-backed agent, config-driven so this is exactly what the (future)
+ * Admin Console would let you pick — a named preset ("claude-code") with a
+ * few knobs, or "custom" with a fully explicit command/args. Defaults to the
+ * real `claude` CLI; set USE_MOCK_CLI=1 to fall back to the free/fast fixture
+ * script for repeated local testing without spending real API budget.
+ */
+function cliAgentConfig(agentId: string, side: DebateSide): AgentConfig {
+  if (useMockCli) {
+    return {
+      agentId,
+      adapter: "cli",
+      cli: { preset: "custom", command: process.execPath, args: [cliFixturePath] },
+    };
+  }
+  return {
+    agentId,
+    adapter: "cli",
+    cli: {
+      preset: "claude-code",
+      systemPrompt: systemPromptFor(side),
+      model: "haiku",
+      maxBudgetUsd: 0.05,
+    },
+  };
+}
+
 async function main() {
   const worldId = randomUUID();
   const eventLog = new EventLog("data/events.db");
+  const cliPool = new RuntimePool({ maxConcurrent: 2, timeoutMs: 90_000, maxCalls: 20 });
 
-  const agents = new Map<string, AgentAdapter>([
-    ["pro-1", buildLlmAgent("pro-1", "pro")],
-    ["con-1", buildCliAgent("con-1")],
-    ["judge-1", buildLlmAgent("judge-1", "judge")],
-  ]);
+  const agentConfigs: AgentConfig[] = [
+    llmAgentConfig("pro-1", "pro"),
+    cliAgentConfig("con-1", "con"),
+    llmAgentConfig("judge-1", "judge"),
+  ];
+  const agents = new Map<string, AgentAdapter>(
+    agentConfigs.map((config) => [config.agentId, createAgentAdapter(config, { cliPool })]),
+  );
 
   console.log(
     `Running debate world ${worldId}\n` +
       `  pro-1, judge-1 -> ${useRealApi ? "live Anthropic API" : "mock adapter (set ANTHROPIC_API_KEY for the real API)"}\n` +
-      `  con-1          -> CliAgentAdapter (fixture CLI process, standing in for Claude Code / Codex CLI)\n`,
+      `  con-1          -> CliAgentAdapter, preset "${useMockCli ? "custom (fixture script)" : "claude-code (real claude -p)"}"` +
+      `${useMockCli ? " — unset USE_MOCK_CLI to use the real CLI" : " (set USE_MOCK_CLI=1 for a free/fast fixture run)"}\n`,
   );
 
   const events = await runWorld({

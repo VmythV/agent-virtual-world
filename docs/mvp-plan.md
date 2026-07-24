@@ -34,7 +34,10 @@
 
 1. **Phase 0（当前）**：仓库初始化、架构文档、Git 管理。
 2. **Phase 1 — 执行引擎骨架**：事件日志 + `AgentAdapter` 接口 + `ApiAgentAdapter` 实现 + 辩论世界模板（turn-based 调度器）。用脚本跑通一场完整的「纯 API Agent 辩论」，事件正确落盘，无 UI。
-3. **Phase 2 — CLI 适配器与沙箱**（已完成）：`CliAgentAdapter` + `RuntimePool`（并发/超时/预算）+ `withSandboxDir`（每次调用独立临时工作目录，用后即删）。`npm run demo:debate` 中 con-1 使用 `CliAgentAdapter`，与 pro-1/judge-1 的 API/mock adapter 协同完成同一局。演示中 CLI 一侧接的是 `src/demo/fixtures/mockCliAgent.mjs`（一个符合 stdin-in/stdout-out 协议的最小脚本），而不是真的拉起 `claude`/`codex` CLI ——自动化 demo 里递归拉起真实 Coding Agent 会话会产生不可控的真实费用和延迟，且有嵌套会话的风险，不适合作为可重复运行的验证脚本。接入真实 CLI 时只需把 `CliAgentAdapter` 的 `command`/`args` 指向真实可执行文件，协议不变。
+3. **Phase 2 — CLI 适配器与沙箱**（已完成）：`CliAgentAdapter` + `RuntimePool`（并发/超时/预算）+ `withSandboxDir`（每次调用独立临时工作目录，用后即删）。`npm run demo:debate` 中 con-1 使用 `CliAgentAdapter`，与 pro-1/judge-1 的 API/mock adapter 协同完成同一局。
+   - **Agent 配置 → 适配器的策略工厂**：新增 `src/core/agentConfig.ts`（声明式 `AgentConfig`：`api` / `mock` / `cli`）+ `src/core/agentFactory.ts`（`createAgentAdapter` 把配置变成真实 adapter 实例）。这就是未来管理侧 Agent CRUD 表单要写入/读取的数据结构。
+   - **CLI 拉起方式两种预设**：`CliInvocationConfig` 的 `preset: "claude-code"` 会展开成真实 `claude -p --output-format text --no-session-persistence --tools "" [--model] [--system-prompt] [--max-budget-usd]` 非交互调用（`resolveCliInvocation` 负责展开）；`preset: "custom"` 则直接透传任意 `command`/`args`，用于接入 Codex CLI 或其他脚本。demo 默认用 `claude-code` 预设跑真实 CLI（con-1 的发言来自真实嵌套调用，已验证内容质量与固定脚本明显不同），设置环境变量 `USE_MOCK_CLI=1` 可切回 `custom` 预设指向的免费 fixture 脚本，方便反复本地测试不产生真实费用。
+   - **真实 CLI 调用的安全默认值**：`--tools ""` 禁用工具（辩论场景只需要文本生成，遵循最小权限）、`--no-session-persistence` 不落盘会话文件、`--max-budget-usd` 限制单次调用花费上限，配合 `RuntimePool` 的超时/并发/调用预算，多层限制嵌套 Coding Agent 的资源消耗。
 4. **Phase 3 — 事件流对外暴露**：REST（历史事件、世界/Agent 配置 CRUD）+ WebSocket（实时事件推送）。
 5. **Phase 4 — 展示侧（先文本后 3D）**：先用纯文本时间轴验证事件流可读性，再接入 Three.js 舞台场景 + 通用 Avatar 状态机。
 6. **Phase 5 — 管理侧**：Agent CRUD、发起辩论（题目/双方/轮次）的表单与运行控制界面。

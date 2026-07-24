@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { StoredAgent } from "../types";
 import { createWorld, listAgents } from "../api";
 
-type Template = "debate" | "discussion";
+type Template = "debate" | "discussion" | "werewolf";
 
 function LaunchWorldTab() {
   const navigate = useNavigate();
@@ -20,6 +20,11 @@ function LaunchWorldTab() {
   // discussion-only
   const [participants, setParticipants] = useState<string[]>([]);
   const [moderator, setModerator] = useState("");
+
+  // werewolf-only
+  const [werewolves, setWerewolves] = useState<string[]>([]);
+  const [villagers, setVillagers] = useState<string[]>([]);
+  const [seer, setSeer] = useState("");
 
   const [error, setError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
@@ -48,13 +53,25 @@ function LaunchWorldTab() {
       }
       agentIds = Array.from(new Set([...pro, ...con, ...(judge ? [judge] : [])]));
       config = { topic, rounds, sides: { pro, con }, judge: judge || undefined };
-    } else {
+    } else if (template === "discussion") {
       if (participants.length === 0) {
         setError("至少需要一个参与者");
         return;
       }
       agentIds = Array.from(new Set([...participants, ...(moderator ? [moderator] : [])]));
       config = { topic, rounds, participants, moderator: moderator || undefined };
+    } else {
+      if (werewolves.length === 0) {
+        setError("至少需要一个狼人");
+        return;
+      }
+      if (villagers.length === 0 && !seer) {
+        setError("狼人阵营之外至少需要一个村民或预言家，否则游戏一开始就结束了");
+        return;
+      }
+      const players = Array.from(new Set([...werewolves, ...villagers, ...(seer ? [seer] : [])]));
+      agentIds = players;
+      config = { players, werewolves, seer: seer || undefined };
     }
 
     setSubmitting(true);
@@ -79,25 +96,30 @@ function LaunchWorldTab() {
           <select value={template} onChange={(e) => setTemplate(e.target.value as Template)}>
             <option value="debate">辩论赛</option>
             <option value="discussion">讨论组</option>
+            <option value="werewolf">狼人杀</option>
           </select>
         </label>
 
-        <label>
-          {template === "debate" ? "辩题" : "讨论话题"}
-          <input required value={topic} onChange={(e) => setTopic(e.target.value)} />
-        </label>
-        <label>
-          轮次
-          <input
-            type="number"
-            min={1}
-            max={10}
-            value={rounds}
-            onChange={(e) => setRounds(Number(e.target.value))}
-          />
-        </label>
+        {template !== "werewolf" && (
+          <>
+            <label>
+              {template === "debate" ? "辩题" : "讨论话题"}
+              <input required value={topic} onChange={(e) => setTopic(e.target.value)} />
+            </label>
+            <label>
+              轮次
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={rounds}
+                onChange={(e) => setRounds(Number(e.target.value))}
+              />
+            </label>
+          </>
+        )}
 
-        {template === "debate" ? (
+        {template === "debate" && (
           <>
             <fieldset>
               <legend>正方</legend>
@@ -139,7 +161,9 @@ function LaunchWorldTab() {
               </select>
             </label>
           </>
-        ) : (
+        )}
+
+        {template === "discussion" && (
           <>
             <fieldset>
               <legend>参与者</legend>
@@ -166,6 +190,53 @@ function LaunchWorldTab() {
                 ))}
               </select>
             </label>
+          </>
+        )}
+
+        {template === "werewolf" && (
+          <>
+            <fieldset>
+              <legend>狼人</legend>
+              {agents.map((a) => (
+                <label key={a.config.agentId} className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={werewolves.includes(a.config.agentId)}
+                    onChange={() => toggle(werewolves, setWerewolves, a.config.agentId)}
+                  />
+                  {a.config.agentId} <span className="muted-cell">({a.config.adapter})</span>
+                </label>
+              ))}
+            </fieldset>
+
+            <fieldset>
+              <legend>村民</legend>
+              {agents.map((a) => (
+                <label key={a.config.agentId} className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={villagers.includes(a.config.agentId)}
+                    onChange={() => toggle(villagers, setVillagers, a.config.agentId)}
+                  />
+                  {a.config.agentId} <span className="muted-cell">({a.config.adapter})</span>
+                </label>
+              ))}
+            </fieldset>
+
+            <label>
+              预言家（可选）
+              <select value={seer} onChange={(e) => setSeer(e.target.value)}>
+                <option value="">无预言家</option>
+                {agents.map((a) => (
+                  <option key={a.config.agentId} value={a.config.agentId}>
+                    {a.config.agentId}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="muted-cell">
+              同一个 Agent 只应出现在一个身份里；上帝视角（时间轴/管理侧）始终能看到所有身份，Agent 之间的信息差只体现在它们各自收到的观测里。
+            </p>
           </>
         )}
 

@@ -12,6 +12,15 @@ export interface WorldEvent {
   actorId?: string;
   payload: Record<string, unknown>;
   highlight?: boolean;
+  /**
+   * Restricts which agents see this event in their own Observation.history.
+   * `undefined` = every agent can see it (the default — matches every
+   * template before werewolf). An explicit array (including `[]`) means
+   * only those agentIds see it via buildObservation; it is NOT filtered
+   * from EventLog.history()/REST/WS, so the human "god" observer always
+   * sees everything regardless of this field. See docs/architecture.md §2.6.
+   */
+  visibleTo?: string[];
 }
 
 export type NewWorldEvent = Omit<WorldEvent, "id" | "worldId" | "sequence" | "timestamp">;
@@ -65,4 +74,13 @@ export interface WorldTemplate<TState extends WorldState = WorldState> {
   applyAction(agentId: string, action: AgentAction, state: TState): ApplyActionResult;
 
   isFinished(state: TState): boolean;
+
+  /**
+   * Optional: who should see "it's this agent's turn now" (the engine-level
+   * turn.started event). Omit, or return undefined, for public (the
+   * default for every template that doesn't have hidden roles). Needed by
+   * games like werewolf where even the fact that it's a given agent's turn
+   * during the night phase would leak their role.
+   */
+  visibilityForActor?(actorId: string, state: TState): string[] | undefined;
 }

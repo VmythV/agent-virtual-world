@@ -56,7 +56,11 @@
    - **讨论组**（已完成）：`src/worldTemplates/discussionWorldTemplate.ts`，把辩论模板的骨架去掉「正反方对立」，改成所有参与者按固定顺序轮流发言，可选主持人在最后给总结（`discussion.summary` 事件）而不是胜负判定。跟预想的一样，几乎是把 `debateWorldTemplate.ts` 复制过来删掉 `sides` 概念——证实了架构文档里「讨论组可以复用辩论骨架」的判断。
      - 前端同步加了 `resolveStageLayout()`（`web/src/Stage3D.tsx`）：不需要知道模板名字，只看 `world.created` 事件 payload 里有没有 `sides`（辩论）还是 `participants`（讨论组）字段，自动选对应的舞台布局——辩论是正反对立站位，讨论组是参与者围成半圆、主持人在后方。发起世界表单（`LaunchWorldTab.tsx`）加了模板下拉，切换后表单字段跟着换（正反方+裁判 vs 参与者+主持人）。
      - 端到端验证：先用 REST 直接跑一局讨论（确认事件序列跟预期一致：`world.created → round.start → turn.started/agent.speak ×4 → round.start → turn.started/agent.speak ×2 → turn.started/discussion.summary`），再用 Playwright 走完整 UI 流程（3D 半圆布局正确渲染、通过管理控制台的模板下拉发起新的讨论组世界），全程无控制台报错。
-   - 下一个：狼人杀（隐藏信息 + 投票，检验 Observation 协议对「每个 Agent 看到不同信息」的支持是否够用）→ 鱼缸（tick-based 调度，检验连续模拟场景，当前调度器只支持 turn-based，需要扩展）。
+   - **狼人杀**（已完成）：`src/worldTemplates/werewolfWorldTemplate.ts`。夜晚（狼人杀人票 + 可选预言家查验）→ 白天讨论 → 白天投票，每次淘汰后检查胜负，循环直到某一方获胜。这是第一个真正需要「不同 Agent 看到不同信息」的模板，回头检验了 §2.1 留的开放问题，结论和改动记在 `docs/architecture.md` §2.6：
+     - **协议扩展（都是小的、原则性的加法，不影响已有模板）**：`WorldEvent` 加 `visibleTo?: string[]`（`undefined`=公开，`[]`=对所有 Agent 隐藏但上帝视角仍可见）；`WorldTemplate` 加可选的 `visibilityForActor()`，让调度器能正确标记 `turn.started` 事件的可见性（连「轮到谁了」在夜晚阶段本身都可能泄密）；调度器统一按 `visibleTo` 过滤喂给 `buildObservation` 的历史，过滤逻辑不用每个模板自己写。**REST/WS 从不做这个过滤**——人类「上帝」通过管理侧/展示侧看到的永远是完整事件流，信息差只存在于 Agent 各自的 Observation 里。
+     - **动作协议扩展**：狼人杀的杀人票/查验/投票都是「从候选名单里选一个」而不是自由文本，`core/protocol.ts` 加了 `expectedResponseShape`/`choices` 约定，`ApiAgentAdapter`/`CliAgentAdapter`/`MockAgentAdapter` 统一通过新的 `buildActionPayload()` 处理，解析失败时兜底选第一个候选项（不会让整局因为一次奇怪的模型输出而崩溃）。
+     - **正确性验证**：`npm run demo:werewolf`——全 mock、结局可预测的一局（村民识破并投出狼人），跑完后直接断言 villager-2 的 `Observation.history` 里：没有 `roles.assigned`/`seer.result`/`night.action`、没有别人的 `role.assigned`、没有夜晚阶段狼人/预言家的 `turn.started`，但公共信息（`night.result` 等）正常可见——5 项断言全部通过。又用 Playwright 走了一遍管理控制台的狼人杀发起表单 + 3D 环形站位（按身份着色，死亡用变灰+倾倒+划线名字表示）+ 时间轴的「🔒 仅 X 可见」私密事件徽标，两边（后端断言 vs 前端展示）看到的私密事件数量完全一致，无控制台报错。
+   - 下一个：鱼缸（tick-based 调度，检验连续模拟场景——当前调度器只支持 turn-based，需要扩展一种新的调度模式）。
 
 ## 5. 验收标准（Phase 1-5 完成时）
 

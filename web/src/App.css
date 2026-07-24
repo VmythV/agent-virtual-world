@@ -229,6 +229,11 @@
   pointer-events: none;
 }
 
+.avatar-label.dead {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
 .avatar-badge {
   font-size: 11px;
   color: #fff;
@@ -299,6 +304,17 @@
 .event-payload {
   color: var(--text-h);
   word-break: break-word;
+  flex: 1;
+}
+
+.event-private {
+  font-size: 11px;
+  color: var(--warn);
+  background: rgba(217, 119, 6, 0.12);
+  border: 1px solid var(--warn);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
 }
 
 .empty-state {

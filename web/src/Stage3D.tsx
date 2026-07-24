@@ -2,9 +2,9 @@ import { useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Html, OrbitControls } from "@react-three/drei";
 import type { Group } from "three";
-import type { AgentVisualState, AvatarState } from "./types";
+import type { AgentVisualState, AvatarState, WorldEvent } from "./types";
 
-export type StageRole = "pro" | "con" | "judge" | "other";
+export type StageRole = "pro" | "con" | "judge" | "other" | "werewolf" | "villager" | "seer";
 
 export interface AgentPlacement {
   agentId: string;
@@ -17,7 +17,12 @@ const ROLE_COLOR: Record<StageRole, string> = {
   con: "#ef4444",
   judge: "#f59e0b",
   other: "#9ca3af",
+  werewolf: "#dc2626",
+  villager: "#38bdf8",
+  seer: "#a855f7",
 };
+
+const DEAD_COLOR = "#4b5563";
 
 /**
  * Debate world template's stage layout: pro/con face off on either side,
@@ -69,14 +74,46 @@ export function resolveDiscussionLayout(worldCreatedPayload: Record<string, unkn
 }
 
 /**
- * Dispatches to the right layout purely from which keys are present in the
- * world.created payload (no template name needed) — stays event-driven, so
- * adding a template doesn't require threading its id through WorldView.
+ * Werewolf world template's stage layout: everyone stands in a circle (no
+ * "sides" — the whole point is you can't tell who's who just from where
+ * they're standing). Colored by role for the god view only: role.assigned
+ * is per-player-private (visibleTo), but the public roles.assigned event
+ * (visibleTo: []) is still visible via the raw, unfiltered EventLog that
+ * the frontend reads from — the human observer is meant to be omniscient
+ * here, unlike the agents themselves.
  */
-export function resolveStageLayout(worldCreatedPayload: Record<string, unknown> | undefined): AgentPlacement[] {
+export function resolveWerewolfLayout(
+  worldCreatedPayload: Record<string, unknown> | undefined,
+  rolesAssignedPayload: Record<string, unknown> | undefined,
+): AgentPlacement[] {
   if (!worldCreatedPayload) return [];
-  if ("sides" in worldCreatedPayload) return resolveDebateLayout(worldCreatedPayload);
-  if ("participants" in worldCreatedPayload) return resolveDiscussionLayout(worldCreatedPayload);
+  const players = (worldCreatedPayload.players as string[] | undefined) ?? [];
+  const roles = (rolesAssignedPayload?.roles as Record<string, StageRole> | undefined) ?? {};
+  const radius = 3.6;
+
+  return players.map((agentId, i) => {
+    const angle = (i / players.length) * Math.PI * 2;
+    const x = Math.sin(angle) * radius;
+    const z = -2 - Math.cos(angle) * radius * 0.5;
+    return { agentId, role: roles[agentId] ?? "other", position: [x, 0, z] };
+  });
+}
+
+/**
+ * Dispatches to the right layout by inspecting the event history — no
+ * template name needs to be threaded through WorldView. Debate/discussion
+ * only need world.created; werewolf also needs the separate roles.assigned
+ * event since roles aren't public in world.created itself.
+ */
+export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
+  const created = history.find((e) => e.type === "world.created");
+  if (!created) return [];
+  if ("sides" in created.payload) return resolveDebateLayout(created.payload);
+  if ("participants" in created.payload) return resolveDiscussionLayout(created.payload);
+  if ("players" in created.payload) {
+    const rolesEvent = history.find((e) => e.type === "roles.assigned");
+    return resolveWerewolfLayout(created.payload, rolesEvent?.payload);
+  }
   return [];
 }
 
@@ -118,42 +155,50 @@ export function Stage3D({
 
 function AgentAvatar({ placement, visual }: { placement: AgentPlacement; visual: AgentVisualState }) {
   const bobRef = useRef<Group>(null);
+  const dead = visual.dead ?? false;
 
   useFrame(({ clock }) => {
     if (!bobRef.current) return;
+    if (dead) {
+      bobRef.current.position.y = 0;
+      return;
+    }
     const t = clock.getElapsedTime();
     const speed = bobSpeed(visual.state);
     const height = bobHeight(visual.state);
     bobRef.current.position.y = Math.sin(t * speed + placement.position[0]) * height;
   });
 
-  const color = ROLE_COLOR[placement.role];
-  const emissiveIntensity = visual.state === "speaking" ? 0.9 : visual.state === "thinking" ? 0.45 : 0.1;
+  const color = dead ? DEAD_COLOR : ROLE_COLOR[placement.role];
+  const emissiveIntensity = dead ? 0 : visual.state === "speaking" ? 0.9 : visual.state === "thinking" ? 0.45 : 0.1;
 
   return (
     <group position={placement.position}>
-      <group ref={bobRef}>
+      <group ref={bobRef} rotation={dead ? [0, 0, Math.PI / 2.2] : [0, 0, 0]}>
         <mesh position={[0, 1, 0]} castShadow>
           <capsuleGeometry args={[0.35, 0.9, 4, 8]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissiveIntensity} />
+          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissiveIntensity} transparent opacity={dead ? 0.5 : 1} />
         </mesh>
         <mesh position={[0, 1.75, 0]} castShadow>
           <sphereGeometry args={[0.28, 16, 16]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissiveIntensity} />
+          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={emissiveIntensity} transparent opacity={dead ? 0.5 : 1} />
         </mesh>
       </group>
 
       <Html position={[0, 2.35, 0]} center distanceFactor={8} occlude>
-        <div className="avatar-label">{placement.agentId}</div>
+        <div className={`avatar-label${dead ? " dead" : ""}`}>
+          {placement.agentId}
+          {dead ? " ✝" : ""}
+        </div>
       </Html>
 
-      {visual.state === "thinking" && (
+      {!dead && visual.state === "thinking" && (
         <Html position={[0, 2.05, 0]} center distanceFactor={8}>
           <div className="avatar-badge thinking">思考中…</div>
         </Html>
       )}
 
-      {visual.state === "speaking" && visual.text && (
+      {!dead && visual.state === "speaking" && visual.text && (
         <Html position={[0, 2.05, 0]} center distanceFactor={6}>
           <div className="speech-bubble">{visual.text}</div>
         </Html>

@@ -102,6 +102,15 @@ interface WorldTemplate {
 
 「做题世界」这类没有空间/角色平等互动概念的场景，更接近工具编排而非「世界模拟」，建议作为一种特殊的、无空间概念的世界模板对待，而不强行套用角色站位等展示逻辑。
 
+### 2.6 隐藏信息（狼人杀验证过的设计）
+
+做完狼人杀模板后回头检验了 §2.1 留下的开放问题——协议对「每个 Agent 看到不同信息」的支持够不够用。结论：`WorldTemplate.buildObservation(agentId, state, history)` 本来就收 `agentId`，模板完全可以按需过滤/重写要塞进 `Observation.history` 的内容，这一点原设计就是对的；真正缺的是两处工程细节，都是小的、原则性的扩展：
+
+- **事件级可见性**：`WorldEvent` 加了一个可选字段 `visibleTo?: string[]`。`undefined` 表示所有 Agent 都能在自己的 `Observation.history` 里看到（狼人杀之前的模板全都是这个默认值，完全不受影响）；显式数组（包括空数组 `[]`）表示只有列表里的 Agent 才能看到。**这个过滤只发生在调度器喂给 `buildObservation` 的历史里**，`EventLog.history()` 本身、以及它支撑的 REST/WS 接口，从不做这个过滤——也就是说管理侧/展示侧的人类「上帝」永远是全知视角，能看到每个 Agent 的真实身份、狼人的夜间投票、预言家的查验结果，而 Agent 之间的信息差只体现在它们各自收到的 `Observation` 里。调度器里的过滤是通用的一行代码，任何新模板不用自己实现过滤逻辑，只需要在产生事件时打上正确的 `visibleTo` 标签。
+- **回合可见性**：连「轮到谁了」这件事本身，在有隐藏角色的游戏里也可能泄密（比如夜晚阶段谁的回合被触发，本身就暴露了谁是狼人/预言家）。`turn.started` 事件是调度器（而不是模板）产生的，所以 `WorldTemplate` 加了一个可选方法 `visibilityForActor(actorId, state)`，调度器在 emit `turn.started` 前调用它决定这条事件的 `visibleTo`，不实现这个方法的模板（辩论、讨论组）默认公开，行为不变。
+
+配套地，Agent 的动作协议也补了一块：之前 `ApiAgentAdapter`/`CliAgentAdapter` 只会把模型的原始文本包成 `{ payload: { text } }`，这对「发言」类动作够用，但狼人杀的杀人票/查验/投票这类动作需要的是「从一份候选名单里选一个」，不是自由文本。`core/protocol.ts` 加了 `expectedResponseShape`/`choices` 的约定：模板在 `visibleState` 里声明 `responseShape: "choice"` 和 `choices: string[]`，通用适配器据此在 prompt 里列出候选项、并把模型输出解析/校验成 `payload.target`（解析失败时兜底选第一个候选项，保证世界不会因为一次奇怪的输出就整局崩溃）。
+
 ## 3. 展示侧设计
 
 ### 3.1 通用虚拟人状态机
@@ -141,7 +150,7 @@ idle → thinking → speaking/acting → idle
 ## 5. 悬而未决的风险点（持续跟踪）
 
 - **CLI Agent 的延迟与成本**：回合制场景里如果多个角色都是 CliAgentAdapter，单局耗时和费用可能远超预期，需要在 Runtime Pool Manager 里做好预算与降级策略。
-- **Observation/Action 协议的可扩展性**：新增世界模板时，协议是否足够通用，需要在做完第二个模板（如狼人杀）后回头检验。
+- ~~**Observation/Action 协议的可扩展性**：新增世界模板时，协议是否足够通用，需要在做完第二个模板（如狼人杀）后回头检验。~~ 已在做完狼人杀后检验，结论见 §2.6：原设计基本够用，只补了 `visibleTo`（事件级可见性）和 `responseShape`/`choices`（结构化选择动作）两处小的、原则性的扩展，均向后兼容。
 - **沙箱隔离的安全边界**：MVP 阶段的受限工作目录方案是否足够，需要在引入 CliAgentAdapter 时重新评估。
   - 已验证的副作用：子进程 `cwd` 是每次调用新建的临时目录，不是项目目录，所以 `custom` 预设里 `command`/`args` 引用本地脚本必须给绝对路径。管理侧 Agent CRUD 表单（Phase 5）在配置 `custom` CLI 命令时应该提示或校验这一点，避免用户填相对路径导致运行时才报错。
 - **3D 展示对无空间场景的适配成本**：辩论/讨论组这类场景的「站桩发言」表现是否足够传达决策过程，可能需要辅以字幕/气泡等 2D 叠加信息。

@@ -12,6 +12,8 @@ export interface WorldEvent {
   actorId?: string;
   payload: Record<string, unknown>;
   highlight?: boolean;
+  /** Present when this event was hidden from some/all agents' own Observation — the frontend always receives the full unfiltered log regardless (god view). */
+  visibleTo?: string[];
 }
 
 export type WorldStatus = "running" | "finished" | "failed";
@@ -34,6 +36,7 @@ export type AvatarState = "idle" | "thinking" | "speaking";
 export interface AgentVisualState {
   state: AvatarState;
   text?: string;
+  dead?: boolean;
 }
 
 /** Mirrors src/core/agentConfig.ts. */

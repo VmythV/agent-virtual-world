@@ -29,7 +29,8 @@ export class EventLog extends EventEmitter {
         type TEXT NOT NULL,
         actor_id TEXT,
         payload TEXT NOT NULL,
-        highlight INTEGER NOT NULL DEFAULT 0
+        highlight INTEGER NOT NULL DEFAULT 0,
+        visible_to TEXT
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_events_world_seq ON events (world_id, sequence);
     `);
@@ -47,8 +48,8 @@ export class EventLog extends EventEmitter {
 
     this.db
       .prepare(
-        `INSERT INTO events (id, world_id, sequence, timestamp, type, actor_id, payload, highlight)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO events (id, world_id, sequence, timestamp, type, actor_id, payload, highlight, visible_to)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         full.id,
@@ -59,6 +60,7 @@ export class EventLog extends EventEmitter {
         full.actorId ?? null,
         JSON.stringify(full.payload),
         full.highlight ? 1 : 0,
+        full.visibleTo !== undefined ? JSON.stringify(full.visibleTo) : null,
       );
 
     this.emit("appended", full);
@@ -96,6 +98,7 @@ interface SqliteEventRow {
   actor_id: string | null;
   payload: string;
   highlight: number;
+  visible_to: string | null;
 }
 
 function rowToEvent(row: SqliteEventRow): WorldEvent {
@@ -108,5 +111,6 @@ function rowToEvent(row: SqliteEventRow): WorldEvent {
     actorId: row.actor_id ?? undefined,
     payload: JSON.parse(row.payload) as Record<string, unknown>,
     highlight: !!row.highlight,
+    visibleTo: row.visible_to !== null ? (JSON.parse(row.visible_to) as string[]) : undefined,
   };
 }

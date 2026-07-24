@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AgentAction, AgentAdapter, Observation } from "../core/types.js";
-import { buildPrompt, expectedActionType } from "../core/protocol.js";
+import { buildActionPayload, buildPrompt, expectedActionType } from "../core/protocol.js";
 
 export interface ApiAgentAdapterConfig {
   agentId: string;
@@ -37,6 +37,6 @@ export class ApiAgentAdapter implements AgentAdapter {
       .join("\n")
       .trim();
 
-    return { type: expectedActionType(observation), payload: { text } };
+    return { type: expectedActionType(observation), payload: buildActionPayload(observation, text) };
   }
 }

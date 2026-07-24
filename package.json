@@ -8,6 +8,7 @@
   },
   "scripts": {
     "demo:debate": "tsx src/demo/runDebate.ts",
+    "demo:werewolf": "tsx src/demo/runWerewolf.ts",
     "server": "tsx src/server/index.ts",
     "typecheck": "tsc --noEmit"
   },

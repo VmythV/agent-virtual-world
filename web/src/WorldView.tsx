@@ -56,12 +56,14 @@ function WorldView() {
       const data = JSON.parse(msg.data) as WsMessage;
       if (data.type === "history") {
         setEvents(data.events);
-        const created = data.events.find((e) => e.type === "world.created");
-        const layout = resolveStageLayout(created?.payload);
+        const layout = resolveStageLayout(data.events);
         setPlacements(layout);
-        setAgentStates(Object.fromEntries(layout.map((p) => [p.agentId, { state: "idle" as const }])));
-        const lastRound = [...data.events].reverse().find((e) => e.type === "round.start");
-        if (lastRound) setRoundLabel(formatRoundLabel(lastRound.payload));
+        const deadIds = collectDeadAgentIds(data.events);
+        setAgentStates(
+          Object.fromEntries(layout.map((p) => [p.agentId, { state: "idle" as const, dead: deadIds.has(p.agentId) }])),
+        );
+        const lastRound = [...data.events].reverse().find((e) => e.type === "round.start" || e.type === "phase.start");
+        if (lastRound) setRoundLabel(formatRoundLabel(lastRound));
       } else {
         setEvents((prev) => [...prev, data.event]);
         applyLiveEvent(data.event);
@@ -89,9 +91,13 @@ function WorldView() {
   }, [events]);
 
   function applyLiveEvent(event: WorldEvent) {
-    if (event.type === "round.start") {
-      setRoundLabel(formatRoundLabel(event.payload));
-      return;
+    if (event.type === "round.start" || event.type === "phase.start") {
+      setRoundLabel(formatRoundLabel(event));
+    }
+
+    if (event.type === "night.result" || event.type === "vote.result") {
+      const victimId = (event.payload.victim ?? event.payload.eliminated) as string | null | undefined;
+      if (victimId) markDead(victimId);
     }
 
     if (event.type === "turn.started" && event.actorId) {
@@ -112,7 +118,13 @@ function WorldView() {
   function setAgentState(agentId: string, visual: AgentVisualState) {
     const pending = revertTimers.current[agentId];
     if (pending) clearTimeout(pending);
-    setAgentStates((prev) => ({ ...prev, [agentId]: visual }));
+    setAgentStates((prev) => ({ ...prev, [agentId]: { ...visual, dead: prev[agentId]?.dead } }));
+  }
+
+  function markDead(agentId: string) {
+    const pending = revertTimers.current[agentId];
+    if (pending) clearTimeout(pending);
+    setAgentStates((prev) => ({ ...prev, [agentId]: { ...(prev[agentId] ?? { state: "idle" }), dead: true } }));
   }
 
   const selectedWorld = worlds.find((w) => w.id === worldId);
@@ -187,10 +199,31 @@ function WorldView() {
   );
 }
 
-function formatRoundLabel(payload: Record<string, unknown>): string {
-  const round = payload.round;
-  const total = payload.totalRounds;
-  return `第 ${round}${total ? ` / ${total}` : ""} 轮`;
+const PHASE_LABELS: Record<string, string> = {
+  night: "🌙 夜晚",
+  "day-discuss": "☀️ 白天·讨论",
+  "day-vote": "☀️ 白天·投票",
+};
+
+function formatRoundLabel(event: WorldEvent): string {
+  if (event.type === "phase.start") {
+    const phase = event.payload.phase as string;
+    return `${PHASE_LABELS[phase] ?? phase} · 第 ${event.payload.round} 轮`;
+  }
+  const total = event.payload.totalRounds;
+  return `第 ${event.payload.round}${total ? ` / ${total}` : ""} 轮`;
+}
+
+/** Scans history for who's already been eliminated, for worlds loaded mid-game or finished. */
+function collectDeadAgentIds(history: WorldEvent[]): Set<string> {
+  const dead = new Set<string>();
+  for (const event of history) {
+    if (event.type === "night.result" || event.type === "vote.result") {
+      const victimId = (event.payload.victim ?? event.payload.eliminated) as string | null | undefined;
+      if (victimId) dead.add(victimId);
+    }
+  }
+  return dead;
 }
 
 function EventRow({ event }: { event: WorldEvent }) {
@@ -200,6 +233,11 @@ function EventRow({ event }: { event: WorldEvent }) {
       <span className="event-type">{event.type}</span>
       {event.actorId && <span className="event-actor">{event.actorId}</span>}
       <span className="event-payload">{renderPayload(event)}</span>
+      {event.visibleTo && (
+        <span className="event-private" title={event.visibleTo.length ? `仅 ${event.visibleTo.join(", ")} 可见` : "任何 Agent 都看不到，仅上帝视角可见"}>
+          🔒 {event.visibleTo.length ? event.visibleTo.join(",") : "无 Agent"} 可见
+        </span>
+      )}
     </div>
   );
 }

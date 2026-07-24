@@ -49,9 +49,18 @@ export async function runWorld<TState extends WorldState>(
 
     // Emitted before the (possibly slow, real CLI/API) call so clients can
     // show "this agent is deciding now" instead of only seeing the result.
-    persisted.push(eventLog.append(worldId, { type: "turn.started", actorId, payload: {} }));
+    // visibilityForActor lets games with hidden roles (werewolf) avoid
+    // leaking whose turn it is during a private phase.
+    const turnVisibleTo = template.visibilityForActor?.(actorId, state);
+    persisted.push(
+      eventLog.append(worldId, { type: "turn.started", actorId, payload: {}, visibleTo: turnVisibleTo }),
+    );
 
-    const history = eventLog.history(worldId);
+    // Every template gets this filtering for free: an event is visible to
+    // this actor unless it was tagged with a visibleTo list that excludes
+    // them. REST/WS never apply this filter, so the human observer always
+    // sees the raw, unredacted history regardless of what agents see.
+    const history = eventLog.history(worldId).filter((e) => !e.visibleTo || e.visibleTo.includes(actorId));
     const observation = template.buildObservation(actorId, state, history);
     const action = await agent.act(observation);
     const { events } = template.applyAction(actorId, action, state);

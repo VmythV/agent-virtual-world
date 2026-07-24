@@ -1,5 +1,5 @@
 import type { AgentAction, AgentAdapter, Observation } from "../core/types.js";
-import { buildPrompt, expectedActionType } from "../core/protocol.js";
+import { buildActionPayload, buildPrompt, expectedActionType } from "../core/protocol.js";
 import { RuntimePool } from "../runtime/runtimePool.js";
 import { runProcess } from "../runtime/processRunner.js";
 import { withSandboxDir } from "../runtime/sandbox.js";
@@ -42,7 +42,7 @@ export class CliAgentAdapter implements AgentAdapter {
           input: buildPrompt(observation),
           signal,
         });
-        return { type: expectedActionType(observation), payload: { text: result.stdout.trim() } };
+        return { type: expectedActionType(observation), payload: buildActionPayload(observation, result.stdout) };
       }),
     );
   }

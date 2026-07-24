@@ -28,8 +28,24 @@ export interface AquariumView {
   tick: number;
 }
 
+export interface CreatureSnapshot {
+  id: string;
+  type: "predator" | "prey";
+  x: number;
+  z: number;
+  energy: number;
+}
+
+export interface EcosystemView {
+  field: number;
+  creatures: CreatureSnapshot[];
+  tick: number;
+  counts: { predators: number; prey: number };
+}
+
 export interface ShownView {
   aquarium?: AquariumView;
+  ecosystem?: EcosystemView;
   placements: AgentPlacement[];
   agentStates: Record<string, AgentVisualState>;
   roundLabel?: string;
@@ -44,6 +60,18 @@ export function aquariumFromHistory(history: WorldEvent[]): AquariumView | undef
   const fish = (lastTick?.payload.fish as FishSnapshot[] | undefined) ?? [];
   const tick = (lastTick?.payload.tick as number | undefined) ?? 0;
   return { tank, fish, tick };
+}
+
+/** The ecosystem field + the latest creature snapshot in `history` (undefined for non-ecosystem worlds). */
+export function ecosystemFromHistory(history: WorldEvent[]): EcosystemView | undefined {
+  const created = history.find((e) => e.type === "world.created");
+  if (!created || !("predators" in created.payload) || !("field" in created.payload)) return undefined;
+  const field = created.payload.field as number;
+  const lastTick = [...history].reverse().find((e) => e.type === "world.tick");
+  const creatures = (lastTick?.payload.creatures as CreatureSnapshot[] | undefined) ?? [];
+  const tick = (lastTick?.payload.tick as number | undefined) ?? 0;
+  const counts = (lastTick?.payload.counts as { predators: number; prey: number } | undefined) ?? { predators: 0, prey: 0 };
+  return { field, creatures, tick, counts };
 }
 
 /** Who's already been eliminated as of this history slice (werewolf). */
@@ -83,6 +111,7 @@ export function reconstructView(events: WorldEvent[], cursor: number): ShownView
   const upto = events.slice(0, cursor + 1);
 
   const aquarium = aquariumFromHistory(upto);
+  const ecosystem = ecosystemFromHistory(upto);
   const placements = resolveStageLayout(upto);
   const dead = collectDeadAgentIds(upto);
 
@@ -102,5 +131,5 @@ export function reconstructView(events: WorldEvent[], cursor: number): ShownView
   const lastRound = [...upto].reverse().find((e) => e.type === "round.start" || e.type === "phase.start");
   const roundLabel = lastRound ? formatRoundLabel(lastRound) : undefined;
 
-  return { aquarium, placements, agentStates, roundLabel };
+  return { aquarium, ecosystem, placements, agentStates, roundLabel };
 }

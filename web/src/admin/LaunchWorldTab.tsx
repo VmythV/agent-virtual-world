@@ -3,7 +3,15 @@ import { useNavigate } from "react-router-dom";
 import type { StoredAgent } from "../types";
 import { createWorld, listAgents } from "../api";
 
-type Template = "debate" | "discussion" | "werewolf" | "aquarium" | "problem-solving" | "human-lab" | "auction";
+type Template =
+  | "debate"
+  | "discussion"
+  | "werewolf"
+  | "aquarium"
+  | "problem-solving"
+  | "human-lab"
+  | "auction"
+  | "ecosystem";
 
 function LaunchWorldTab() {
   const navigate = useNavigate();
@@ -44,6 +52,11 @@ function LaunchWorldTab() {
   const [itemsText, setItemsText] = useState("古董花瓶\n限量球鞋");
   const [valuations, setValuations] = useState<Record<string, string>>({});
   const [auctioneer, setAuctioneer] = useState("");
+
+  // ecosystem-only
+  const [predators, setPredators] = useState<string[]>([]);
+  const [prey, setPrey] = useState<string[]>([]);
+  const [ecoTicks, setEcoTicks] = useState(60);
 
   const [error, setError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
@@ -119,7 +132,7 @@ function LaunchWorldTab() {
       const personaMap = Object.fromEntries(chosen.map(([id, v]) => [id, v.trim()]));
       agentIds = Array.from(new Set([...Object.keys(personaMap), ...(observer ? [observer] : [])]));
       config = { scenario, rounds, personas: personaMap, observer: observer || undefined };
-    } else {
+    } else if (template === "auction") {
       const items = itemsText.split("\n").map((s) => s.trim()).filter(Boolean);
       if (items.length === 0) {
         setError("至少需要一件拍品");
@@ -136,6 +149,15 @@ function LaunchWorldTab() {
       }
       agentIds = Array.from(new Set([...Object.keys(valMap), ...(auctioneer ? [auctioneer] : [])]));
       config = { items, valuations: valMap, auctioneer: auctioneer || undefined };
+    } else {
+      const preds = predators.filter((id) => !prey.includes(id));
+      const preyIds = prey.filter((id) => !predators.includes(id));
+      if (preds.length === 0 || preyIds.length === 0) {
+        setError("至少需要一个捕食者和一个猎物");
+        return;
+      }
+      agentIds = Array.from(new Set([...preds, ...preyIds]));
+      config = { predators: preds, prey: preyIds, ticks: ecoTicks };
     }
 
     setSubmitting(true);
@@ -165,6 +187,7 @@ function LaunchWorldTab() {
             <option value="problem-solving">做题世界（工具编排）</option>
             <option value="human-lab">人性实验室</option>
             <option value="auction">密封拍卖</option>
+            <option value="ecosystem">生态（捕食-猎物）</option>
           </select>
         </label>
 
@@ -453,6 +476,44 @@ function LaunchWorldTab() {
             </label>
             <p className="muted-cell">
               密封投标：所有竞拍者同时私密出一个数字（复用并发批 + visibleTo），最高者中标、按其出价成交（第一价）。每人只知自己的估值，上帝视角可见全部出价。
+            </p>
+          </>
+        )}
+
+        {template === "ecosystem" && (
+          <>
+            <fieldset>
+              <legend>捕食者（狐狸）</legend>
+              {agents.map((a) => (
+                <label key={a.config.agentId} className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={predators.includes(a.config.agentId)}
+                    onChange={() => toggle(predators, setPredators, a.config.agentId)}
+                  />
+                  {a.config.agentId} <span className="muted-cell">({a.config.adapter})</span>
+                </label>
+              ))}
+            </fieldset>
+            <fieldset>
+              <legend>猎物（兔子）</legend>
+              {agents.map((a) => (
+                <label key={a.config.agentId} className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={prey.includes(a.config.agentId)}
+                    onChange={() => toggle(prey, setPrey, a.config.agentId)}
+                  />
+                  {a.config.agentId} <span className="muted-cell">({a.config.adapter})</span>
+                </label>
+              ))}
+            </fieldset>
+            <label>
+              总 tick 数
+              <input type="number" min={10} max={300} value={ecoTicks} onChange={(e) => setEcoTicks(Number(e.target.value))} />
+            </label>
+            <p className="muted-cell">
+              tick 制连续模拟：捕食者追捕、猎物逃跑，捕食转移能量、无食物则饿死；某一方灭绝或达到 tick 上限即结束。
             </p>
           </>
         )}

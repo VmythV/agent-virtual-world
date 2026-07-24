@@ -131,6 +131,36 @@ describe("human-lab template — private personas", () => {
   });
 });
 
+describe("ecosystem template (tick-based)", () => {
+  it("predators eat prey and the sim terminates with a valid outcome", async () => {
+    const predators = ["fox-1", "fox-2"];
+    const prey = ["r1", "r2", "r3"];
+    const field = 10;
+    const events = await run(
+      "ecosystem",
+      { predators, prey, ticks: 60, field },
+      new Map<string, AgentAdapter>([
+        ...predators.map((id) => [id, mock(id, ["hunt"])] as const),
+        ...prey.map((id) => [id, mock(id, ["wander"])] as const),
+      ]),
+    );
+    const ticks = events.filter((e) => e.type === "world.tick");
+    expect(ticks.length).toBeGreaterThan(1);
+    expect(ticks.length).toBeLessThanOrEqual(61);
+    expect(events.filter((e) => e.type === "eat.event").length).toBeGreaterThanOrEqual(1);
+
+    const finished = events.find((e) => e.type === "world.finished");
+    expect(["predators", "prey", "balance"]).toContain(finished!.payload.winner);
+
+    for (const t of ticks) {
+      for (const c of t.payload.creatures as Array<{ x: number; z: number }>) {
+        expect(Math.abs(c.x)).toBeLessThanOrEqual(field / 2 + 0.01);
+        expect(Math.abs(c.z)).toBeLessThanOrEqual(field / 2 + 0.01);
+      }
+    }
+  });
+});
+
 describe("werewolf template — hidden information", () => {
   it("redacts night/role/seer events from a villager's observation", async () => {
     const villager = new MockAgentAdapter({ agentId: "v2", responses: ["speak", "w1"] });

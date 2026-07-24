@@ -4,13 +4,17 @@ import type { AgentVisualState, WorldEvent, WorldSummary, WsMessage } from "./ty
 import { deleteWorld, fetchWorlds, sendInstruction, stopWorld } from "./api";
 import { Stage3D } from "./Stage3D";
 import { Aquarium3D } from "./Aquarium3D";
+import { Ecosystem3D } from "./Ecosystem3D";
 import { resolveStageLayout, type AgentPlacement } from "./world/layout";
 import {
   aquariumFromHistory,
   collectDeadAgentIds,
+  ecosystemFromHistory,
   formatRoundLabel,
   reconstructView,
   type AquariumView,
+  type CreatureSnapshot,
+  type EcosystemView,
   type FishSnapshot,
   type ShownView,
 } from "./world/replay";
@@ -30,6 +34,7 @@ function WorldView() {
   const [agentStates, setAgentStates] = useState<Record<string, AgentVisualState>>({});
   const [roundLabel, setRoundLabel] = useState<string | undefined>();
   const [aquarium, setAquarium] = useState<AquariumView | undefined>();
+  const [ecosystem, setEcosystem] = useState<EcosystemView | undefined>();
   const [instrTarget, setInstrTarget] = useState("");
   const [instrText, setInstrText] = useState("");
   const [instrSending, setInstrSending] = useState(false);
@@ -64,6 +69,7 @@ function WorldView() {
     setStatus("connecting");
     setRoundLabel(undefined);
     setAquarium(undefined);
+    setEcosystem(undefined);
     setReplay(false);
     setPlaying(false);
     setCursor(0);
@@ -102,8 +108,11 @@ function WorldView() {
         if (data.type === "history") {
           setEvents(data.events);
           const aquariumView = aquariumFromHistory(data.events);
+          const ecosystemView = ecosystemFromHistory(data.events);
           if (aquariumView) {
             setAquarium(aquariumView);
+          } else if (ecosystemView) {
+            setEcosystem(ecosystemView);
           } else {
             const layout = resolveStageLayout(data.events);
             setPlacements(layout);
@@ -117,11 +126,21 @@ function WorldView() {
         } else {
           setEvents((prev) => [...prev, data.event]);
           if (data.event.type === "world.tick") {
-            setAquarium((prev) =>
-              prev
-                ? { ...prev, fish: data.event.payload.fish as FishSnapshot[], tick: data.event.payload.tick as number }
-                : prev,
-            );
+            const p = data.event.payload;
+            if ("fish" in p) {
+              setAquarium((prev) => (prev ? { ...prev, fish: p.fish as FishSnapshot[], tick: p.tick as number } : prev));
+            } else if ("creatures" in p) {
+              setEcosystem((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      creatures: p.creatures as CreatureSnapshot[],
+                      tick: p.tick as number,
+                      counts: p.counts as { predators: number; prey: number },
+                    }
+                  : prev,
+              );
+            }
           } else {
             applyLiveEvent(data.event);
           }
@@ -256,7 +275,7 @@ function WorldView() {
 
   const shown: ShownView = replay
     ? reconstructView(events, cursor)
-    : { aquarium, placements, agentStates, roundLabel };
+    : { aquarium, ecosystem, placements, agentStates, roundLabel };
   const cursorEvent = replay ? events[cursor] : undefined;
 
   return (
@@ -296,7 +315,7 @@ function WorldView() {
               <div className="header-meta">
                 <div className="view-toggle">
                   <button className={viewMode === "stage" ? "active" : ""} onClick={() => setViewMode("stage")}>
-                    {aquarium ? "3D 水族箱" : "3D 舞台"}
+                    {aquarium ? "3D 水族箱" : ecosystem ? "3D 生态" : "3D 舞台"}
                   </button>
                   <button className={viewMode === "timeline" ? "active" : ""} onClick={() => setViewMode("timeline")}>
                     时间轴
@@ -386,6 +405,13 @@ function WorldView() {
                   tank={shown.aquarium.tank}
                   fish={shown.aquarium.fish}
                   tickLabel={`第 ${shown.aquarium.tick} tick`}
+                />
+              ) : shown.ecosystem ? (
+                <Ecosystem3D
+                  field={shown.ecosystem.field}
+                  creatures={shown.ecosystem.creatures}
+                  counts={shown.ecosystem.counts}
+                  tickLabel={`第 ${shown.ecosystem.tick} tick`}
                 />
               ) : (
                 <Stage3D placements={shown.placements} agentStates={shown.agentStates} roundLabel={shown.roundLabel} />

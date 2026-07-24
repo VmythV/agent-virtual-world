@@ -41,6 +41,9 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - run: npm ci
+      # npm install (not ci): Vite 8/rolldown pulls platform-specific wasm
+      # bindings whose transitive optional deps a macOS-generated lock file
+      # can't fully pin for a Linux runner, which trips the stricter `npm ci`.
+      - run: npm install --no-audit --no-fund
       - name: Build
         run: npm run build

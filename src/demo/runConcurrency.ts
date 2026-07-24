@@ -79,13 +79,15 @@ async function main() {
   const totalActCalls = events.filter((e) => e.type === "turn.started").length;
 
   console.log(`最大并发 act() 数: ${tracker.maxActive}`);
-  console.log(`总 act() 调用次数: ${totalActCalls}，总耗时: ${elapsed}ms`);
-  console.log(`若严格串行（120ms/次）理论下限: ${totalActCalls * 120}ms`);
+  console.log(`总 act() 调用次数: ${totalActCalls}，总耗时: ${elapsed}ms（严格串行理论下限约 ${totalActCalls * 120}ms，仅供参考）`);
   console.log(`胜负结果: ${winner}`);
 
+  // `maxActive` is the timing-independent proof that act() calls overlapped
+  // in flight (the day-vote batch reaches 4). The wall-clock comparison is
+  // printed above for intuition but not asserted — it's flaky on shared CI
+  // runners where the 120ms sleeps + scheduling jitter blur the margin.
   const checks: [string, boolean][] = [
-    ["观测到 >= 2 个 Agent 并发决策", tracker.maxActive >= 2],
-    ["实际耗时明显低于严格串行下限（说明确有并发）", elapsed < totalActCalls * 120 * 0.8],
+    ["观测到 >= 2 个 Agent 并发决策（maxActive）", tracker.maxActive >= 2],
     ["游戏仍产出了有效胜负", winner === "werewolves" || winner === "villagers"],
   ];
 

@@ -42,7 +42,10 @@
    - **REST**：`/api/agents` `/api/agents/:id`（GET/POST/PUT/DELETE，`AgentStore` 落 SQLite）；`/api/worlds`（GET 列表、POST 创建并在后台异步跑 `runWorld`，立即返回 202 + worldId，不阻塞请求）、`/api/worlds/:id`（状态：running/finished/failed）、`/api/worlds/:id/events`（完整历史，用于回放）。
    - **WebSocket**：`/ws/worlds/:id` 连接时先发一条 `{type:"history", events:[...]}` 补全到当前为止的全部事件，再持续推送 `{type:"event", event}`，避免客户端要自己协调「先 REST 拉历史再订阅」的竞态。已用真实 `claude-code` 预设的 con-1 验证：连接时历史里已有 3 条事件，之后 5 条（含真实 CLI 发言与裁判判定）逐条实时推到 WS，REST 的 `/events` 与 WS 收到的完整序列一致。
    - **已知取舍**：服务端常驻的 `RuntimePool` 没有设 `maxCalls`（一次性 demo 脚本用的「生命周期调用预算」不适合长驻进程，会把 CLI Agent 永久锁死），单次调用花费仍由 `--max-budget-usd` 兜底；可重置的（如按日）预算跟踪列为后续待办，见 `docs/architecture.md` §5。
-5. **Phase 4 — 展示侧（先文本后 3D）**：先用纯文本时间轴验证事件流可读性，再接入 Three.js 舞台场景 + 通用 Avatar 状态机。
+5. **Phase 4 — 展示侧（先文本后 3D）**：
+   - **纯文本时间轴**（已完成）：`web/`（Vite + React + TS），左侧世界列表（状态用红/黄/绿点区分 running/failed/finished）、右侧事件时间轴（连接 `/ws/worlds/:id`，`highlight` 事件加边框强调）。Vite dev server 代理 `/api`、`/ws` 到后端 `:4000`。已用 headless Chromium 实测：8 条事件正确渲染、WS 状态显示 `open`、控制台无报错，截图确认可读性符合预期。
+   - 实测中发现一个真实的沙箱坑：`CliAgentAdapter` 的子进程 `cwd` 是 `withSandboxDir` 生成的临时目录而不是项目根目录，所以 `custom` 预设的 `command`/`args` 里引用脚本必须用**绝对路径**——相对路径会在临时目录下解析失败。已记录在 `docs/architecture.md`。
+   - **Three.js 舞台 + Avatar 状态机**：待做，见下一步。
 6. **Phase 5 — 管理侧**：Agent CRUD、发起辩论（题目/双方/轮次）的表单与运行控制界面。
 7. **Phase 6+**：新增世界模板——讨论组（复用辩论骨架）→ 狼人杀（隐藏信息 + 投票，检验协议扩展性）→ 鱼缸（tick-based 调度，检验连续模拟场景）。
 

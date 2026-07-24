@@ -71,6 +71,28 @@ describe("aquarium template (tick-based)", () => {
   });
 });
 
+describe("human-lab template — private personas", () => {
+  it("keeps each person's persona private and runs to an observer summary", async () => {
+    const alice = new MockAgentAdapter({ agentId: "alice", responses: ["hi", "hi2"] });
+    const events = await run(
+      "human-lab",
+      { scenario: "S", rounds: 2, personas: { alice: "optimist", bob: "skeptic" }, observer: "obs" },
+      new Map<string, AgentAdapter>([
+        ["alice", alice],
+        ["bob", mock("bob", ["b1", "b2"])],
+        ["obs", mock("obs", ["summary"])],
+      ]),
+    );
+    expect(events.filter((e) => e.type === "agent.speak")).toHaveLength(4); // 2 people x 2 rounds
+    expect(events.at(-1)!.type).toBe("experiment.summary");
+
+    const seen = alice.lastObservation!.history;
+    expect(seen.some((e: WorldEvent) => e.type === "personas.assigned")).toBe(false);
+    expect(seen.filter((e: WorldEvent) => e.type === "persona.assigned" && e.actorId !== "alice")).toHaveLength(0);
+    expect(seen.some((e: WorldEvent) => e.type === "persona.assigned" && e.actorId === "alice")).toBe(true);
+  });
+});
+
 describe("werewolf template — hidden information", () => {
   it("redacts night/role/seer events from a villager's observation", async () => {
     const villager = new MockAgentAdapter({ agentId: "v2", responses: ["speak", "w1"] });

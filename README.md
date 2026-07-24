@@ -11,7 +11,8 @@ One engine, swappable **world templates** — debate, discussion, werewolf, aqua
 ## What it does
 
 - **Plug in any Agent**: a strategy factory unifies "LLM API / CLI process / mock" behind one `AgentAdapter` interface. The CLI adapter can spawn a real `claude -p` non-interactive session, with bounded concurrency/timeout/budget and a fresh sandbox directory per call.
-- **5 world templates**: debate, discussion, werewolf (with hidden information), aquarium (continuous simulation), problem-solving (tool orchestration). Adding a template requires no engine changes.
+- **6 world templates**: debate, discussion, werewolf (hidden information), aquarium (continuous simulation), problem-solving (tool orchestration), human-lab (private personas). Adding a template requires no engine changes.
+- **Run control**: stop or delete a running world; the server reconciles worlds orphaned by a crash/restart back to `failed` on startup.
 - **Two scheduling modes**: turn-based (wait for agents one at a time or in batches) and tick-based (advance continuously on a wall clock). Multiple agents can decide concurrently.
 - **Hidden information**: werewolves' night kills and the seer's inspection results are invisible to other agents, while the human "god" always sees everything.
 - **God intervention**: issue an instruction to any agent (or broadcast) mid-run; it appears in that agent's next observation and is fully auditable.
@@ -85,8 +86,9 @@ flowchart TB
 | `werewolf` | turn-based (night/vote phases concurrent) | Hidden roles, night actions, voting — validates the hidden-info protocol | `npm run demo:werewolf` |
 | `aquarium` | tick-based | Continuous fish-school physics — validates tick scheduling | `npm run demo:aquarium` |
 | `problem-solving` | turn-based | A coordinator directs expert agents and synthesizes an answer (tool orchestration) | `npm run demo:solve` |
+| `human-lab` | turn-based | Each "person" gets a secret persona and reacts to a scenario; an observer analyzes the dynamics | `npm run demo:humanlab` |
 
-Other demos: `npm run demo:god` (instruction delivery / once-only / no leak), `npm run demo:concurrency` (proof of concurrent multi-agent decisions). Every demo is pure mock — free and runnable offline.
+Other demos: `npm run demo:god` (instruction delivery / once-only / no leak), `npm run demo:concurrency` (proof of concurrent multi-agent decisions). Every demo is pure mock — free and runnable offline. `npm test` runs the vitest suite.
 
 ## Quick start
 
@@ -136,4 +138,4 @@ docs/              architecture.md (architecture), mvp-plan.md (build log)
 
 ## Status
 
-Every core capability from the original vision is implemented and verified with real runs: the three-layer architecture, a strategy factory that plugs in any Agent (including a real Claude Code CLI), the hidden-information protocol, dual turn-based/tick-based scheduling, concurrent multi-agent decisions, god commands, history replay, and 5 world templates. Follow-up directions (a resettable CLI budget, real-agent cost/latency load testing, etc.) are tracked in `docs/architecture.md` §5.
+Every core capability from the original vision is implemented and verified with real runs plus an automated test suite (vitest + GitHub Actions CI): the three-layer architecture, a strategy factory that plugs in any Agent (including a real Claude Code CLI), the hidden-information protocol, dual turn-based/tick-based scheduling, concurrent multi-agent decisions, god commands, history replay, run control with restart recovery, and all 6 world templates covering the original example scenarios. Follow-up directions (real-agent cost/latency load testing, auth/multi-user, component-level frontend tests) are tracked in `docs/architecture.md` §5.

@@ -13,7 +13,9 @@ export type StageRole =
   | "villager"
   | "seer"
   | "coordinator"
-  | "expert";
+  | "expert"
+  | "participant"
+  | "observer";
 
 export interface AgentPlacement {
   agentId: string;
@@ -31,6 +33,8 @@ const ROLE_COLOR: Record<StageRole, string> = {
   seer: "#a855f7",
   coordinator: "#f59e0b",
   expert: "#2dd4bf",
+  participant: "#818cf8",
+  observer: "#f59e0b",
 };
 
 const DEAD_COLOR = "#4b5563";
@@ -106,6 +110,29 @@ export function resolveProblemLayout(worldCreatedPayload: Record<string, unknown
 }
 
 /**
+ * Human-experiment-lab layout: the "people" fan out in a semicircle (like
+ * discussion) with the observer/researcher upstage center. Participants get
+ * their own indigo color to read distinctly from a plain discussion.
+ */
+export function resolveHumanLabLayout(worldCreatedPayload: Record<string, unknown> | undefined): AgentPlacement[] {
+  if (!worldCreatedPayload) return [];
+  const participants = (worldCreatedPayload.participants as string[] | undefined) ?? [];
+  const observer = worldCreatedPayload.observer as string | undefined;
+  const placements: AgentPlacement[] = [];
+  const radius = 3.2;
+
+  participants.forEach((agentId, i) => {
+    const spread = participants.length > 1 ? i / (participants.length - 1) - 0.5 : 0;
+    const angle = spread * Math.PI * 0.8;
+    placements.push({ agentId, role: "participant", position: [Math.sin(angle) * radius, 0, -1.5 - Math.cos(angle) * radius * 0.5] });
+  });
+  if (observer) {
+    placements.push({ agentId: observer, role: "observer", position: [0, 0, -4.6] });
+  }
+  return placements;
+}
+
+/**
  * Werewolf world template's stage layout: everyone stands in a circle (no
  * "sides" — the whole point is you can't tell who's who just from where
  * they're standing). Colored by role for the god view only: role.assigned
@@ -141,6 +168,8 @@ export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   const created = history.find((e) => e.type === "world.created");
   if (!created) return [];
   if ("sides" in created.payload) return resolveDebateLayout(created.payload);
+  // human-lab also has "participants", so check its distinctive "scenario" first.
+  if ("scenario" in created.payload) return resolveHumanLabLayout(created.payload);
   if ("participants" in created.payload) return resolveDiscussionLayout(created.payload);
   if ("experts" in created.payload) return resolveProblemLayout(created.payload);
   if ("players" in created.payload) {

@@ -666,6 +666,16 @@
   padding: 2px 0;
 }
 
+.persona-row {
+  display: flex;
+  gap: 6px;
+  padding: 3px 0;
+}
+
+.persona-row input {
+  flex: 1;
+}
+
 .form-error {
   background: rgba(220, 38, 38, 0.12);
   border: 1px solid var(--err);

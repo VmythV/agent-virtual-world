@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { StoredAgent } from "../types";
 import { createWorld, listAgents } from "../api";
 
-type Template = "debate" | "discussion" | "werewolf" | "aquarium" | "problem-solving";
+type Template = "debate" | "discussion" | "werewolf" | "aquarium" | "problem-solving" | "human-lab";
 
 function LaunchWorldTab() {
   const navigate = useNavigate();
@@ -34,6 +34,11 @@ function LaunchWorldTab() {
   const [problem, setProblem] = useState("请解答这道结合了数值计算与图形分析的综合题。");
   const [coordinator, setCoordinator] = useState("");
   const [experts, setExperts] = useState<string[]>([]);
+
+  // human-lab-only
+  const [scenario, setScenario] = useState("囚徒困境的重复博弈：每一轮各自选择合作或背叛。");
+  const [personas, setPersonas] = useState<Record<string, string>>({});
+  const [observer, setObserver] = useState("");
 
   const [error, setError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
@@ -88,7 +93,7 @@ function LaunchWorldTab() {
       }
       agentIds = fish;
       config = { fish, ticks };
-    } else {
+    } else if (template === "problem-solving") {
       if (!coordinator) {
         setError("需要指定一个协调者（世界管理者）");
         return;
@@ -99,6 +104,16 @@ function LaunchWorldTab() {
       }
       agentIds = Array.from(new Set([coordinator, ...experts.filter((e) => e !== coordinator)]));
       config = { problem, coordinator, experts: experts.filter((e) => e !== coordinator) };
+    } else {
+      const withPersona = Object.entries(personas).filter(([, v]) => v.trim() && observer !== undefined);
+      const chosen = withPersona.filter(([id]) => id !== observer);
+      if (chosen.length === 0) {
+        setError("至少需要一个被赋予性格的参与者");
+        return;
+      }
+      const personaMap = Object.fromEntries(chosen.map(([id, v]) => [id, v.trim()]));
+      agentIds = Array.from(new Set([...Object.keys(personaMap), ...(observer ? [observer] : [])]));
+      config = { scenario, rounds, personas: personaMap, observer: observer || undefined };
     }
 
     setSubmitting(true);
@@ -126,6 +141,7 @@ function LaunchWorldTab() {
             <option value="werewolf">狼人杀</option>
             <option value="aquarium">水族箱</option>
             <option value="problem-solving">做题世界（工具编排）</option>
+            <option value="human-lab">人性实验室</option>
           </select>
         </label>
 
@@ -333,6 +349,47 @@ function LaunchWorldTab() {
             </fieldset>
             <p className="muted-cell">
               协调者会反复决定把问题交给哪个专家、或直接汇总；你也可以在运行时用「上帝指令」给协调者下达高层任务，由它代为指挥执行。
+            </p>
+          </>
+        )}
+
+        {template === "human-lab" && (
+          <>
+            <label>
+              情境设定
+              <textarea rows={3} value={scenario} onChange={(e) => setScenario(e.target.value)} />
+            </label>
+            <label>
+              轮次
+              <input type="number" min={1} max={10} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} />
+            </label>
+            <fieldset>
+              <legend>参与者与其（私密）性格设定</legend>
+              {agents
+                .filter((a) => a.config.agentId !== observer)
+                .map((a) => (
+                  <div key={a.config.agentId} className="persona-row">
+                    <input
+                      value={personas[a.config.agentId] ?? ""}
+                      onChange={(e) => setPersonas({ ...personas, [a.config.agentId]: e.target.value })}
+                      placeholder={`${a.config.agentId} 的性格，如「乐观、信任他人」；留空则不参与`}
+                    />
+                  </div>
+                ))}
+            </fieldset>
+            <label>
+              观察者（可选，最后分析群体互动）
+              <select value={observer} onChange={(e) => setObserver(e.target.value)}>
+                <option value="">无观察者</option>
+                {agents.map((a) => (
+                  <option key={a.config.agentId} value={a.config.agentId}>
+                    {a.config.agentId}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="muted-cell">
+              每个参与者只知道自己的性格（复用狼人杀那套 visibleTo 隐藏机制），上帝视角在时间轴能看到所有人的性格设定。
             </p>
           </>
         )}

@@ -4,6 +4,34 @@
   flex-direction: column;
 }
 
+.error-fallback {
+  max-width: 640px;
+  margin: 80px auto;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-h);
+}
+
+.error-fallback pre {
+  text-align: left;
+  background: var(--code-bg);
+  color: var(--err);
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+.error-fallback button {
+  margin: 8px 4px 0;
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
 .top-nav {
   flex-shrink: 0;
   display: flex;

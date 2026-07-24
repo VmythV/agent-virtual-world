@@ -2,21 +2,9 @@ import { useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Edges, Html, OrbitControls } from "@react-three/drei";
 import { Group, MathUtils } from "three";
+import type { FishSnapshot, TankSize } from "./world/replay";
 
-export interface TankSize {
-  w: number;
-  h: number;
-  d: number;
-}
-
-export interface FishSnapshot {
-  id: string;
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-  behavior: string;
-}
+export type { FishSnapshot, TankSize } from "./world/replay";
 
 const FISH_COLORS = ["#f97316", "#22d3ee", "#a3e635", "#e879f9", "#facc15", "#38bdf8"];
 

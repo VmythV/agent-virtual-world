@@ -163,3 +163,5 @@ idle → thinking → speaking/acting → idle
 - **3D 展示对无空间场景的适配成本**：辩论/讨论组这类场景的「站桩发言」表现是否足够传达决策过程，可能需要辅以字幕/气泡等 2D 叠加信息。
 - ~~**长驻服务的 CLI 调用预算**：`RuntimePool` 的 `maxCalls` 是一次性预算，服务端长期运行会把 CLI Agent 永久锁死。~~ 已实现可重置的窗口预算：`RuntimePool` 支持 `maxCallsPerWindow` + `windowMs`，每个窗口滚动重置，服务端默认按小时 500 次（可用 `CLI_MAX_CALLS_PER_HOUR` 等环境变量调整），既兜底成本/失控又不会永久锁死。单次成本仍由每次调用的 `--max-budget-usd` 兜底。更完整的计费/告警系统仍是后续方向。
 - **运行控制与重启恢复**（已实现）：世界在内存里 fire-and-forget 运行，服务重启会遗留 `running` 世界；启动时 `WorldStore.failStaleRunning` 把它们对账成 `failed`。运行中的世界可经 `POST /api/worlds/:id/stop`（`AbortSignal` 协作式取消）终止，或 `DELETE /api/worlds/:id` 删除（连带清事件）。删除被 running 世界引用的 Agent 会 409。
+- **前端韧性**（已实现）：WebSocket 断开后按指数退避自动重连（服务重启/网络抖动后实时视图自恢复，重连时服务端重发全量历史即完成再同步）；顶层 `ErrorBoundary` 兜住单个组件的渲染异常，不至白屏整个应用。
+- **测试与可测性**（已实现）：纯视图派生逻辑（舞台布局分发、回放折叠 `reconstructView`）抽到无 Three/DOM 依赖的 `web/src/world/{layout,replay}.ts`，可在根 vitest 里直接单测（无需 jsdom）。当前测试 45 项，覆盖后端协议/存储/6 模板/调度器 + 前端布局/回放。CI 保障不回归。

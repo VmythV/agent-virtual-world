@@ -43,6 +43,43 @@ export function resolveDebateLayout(worldCreatedPayload: Record<string, unknown>
   return placements;
 }
 
+/**
+ * Discussion world template's stage layout: participants fan out in a
+ * semicircle facing the camera, moderator (if any) stands upstage center —
+ * same "judge slot" as debate's judge, reusing its color.
+ */
+export function resolveDiscussionLayout(worldCreatedPayload: Record<string, unknown> | undefined): AgentPlacement[] {
+  if (!worldCreatedPayload) return [];
+  const participants = (worldCreatedPayload.participants as string[] | undefined) ?? [];
+  const moderator = worldCreatedPayload.moderator as string | undefined;
+  const placements: AgentPlacement[] = [];
+  const radius = 3.2;
+
+  participants.forEach((agentId, i) => {
+    const spread = participants.length > 1 ? i / (participants.length - 1) - 0.5 : 0;
+    const angle = spread * Math.PI * 0.8;
+    const x = Math.sin(angle) * radius;
+    const z = -1.5 - Math.cos(angle) * radius * 0.5;
+    placements.push({ agentId, role: "other", position: [x, 0, z] });
+  });
+  if (moderator) {
+    placements.push({ agentId: moderator, role: "judge", position: [0, 0, -4.6] });
+  }
+  return placements;
+}
+
+/**
+ * Dispatches to the right layout purely from which keys are present in the
+ * world.created payload (no template name needed) — stays event-driven, so
+ * adding a template doesn't require threading its id through WorldView.
+ */
+export function resolveStageLayout(worldCreatedPayload: Record<string, unknown> | undefined): AgentPlacement[] {
+  if (!worldCreatedPayload) return [];
+  if ("sides" in worldCreatedPayload) return resolveDebateLayout(worldCreatedPayload);
+  if ("participants" in worldCreatedPayload) return resolveDiscussionLayout(worldCreatedPayload);
+  return [];
+}
+
 export function Stage3D({
   placements,
   agentStates,

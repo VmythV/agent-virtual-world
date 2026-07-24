@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { AgentVisualState, WorldEvent, WorldSummary, WsMessage } from "./types";
 import { fetchWorlds } from "./api";
-import { Stage3D, resolveDebateLayout, type AgentPlacement } from "./Stage3D";
+import { Stage3D, resolveStageLayout, type AgentPlacement } from "./Stage3D";
 
 type ConnectionStatus = "idle" | "connecting" | "open" | "closed" | "error";
 type ViewMode = "stage" | "timeline";
@@ -57,7 +57,7 @@ function WorldView() {
       if (data.type === "history") {
         setEvents(data.events);
         const created = data.events.find((e) => e.type === "world.created");
-        const layout = resolveDebateLayout(created?.payload);
+        const layout = resolveStageLayout(created?.payload);
         setPlacements(layout);
         setAgentStates(Object.fromEntries(layout.map((p) => [p.agentId, { state: "idle" as const }])));
         const lastRound = [...data.events].reverse().find((e) => e.type === "round.start");

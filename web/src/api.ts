@@ -59,3 +59,14 @@ export async function createWorld(input: CreateWorldInput): Promise<WorldSummary
     }),
   );
 }
+
+/** Sends a "god" instruction to one agent (or all agents when agentId is omitted). */
+export async function sendInstruction(worldId: string, text: string, agentId?: string): Promise<void> {
+  await handleJson(
+    await fetch(`/api/worlds/${worldId}/instructions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentId, text }),
+    }),
+  );
+}

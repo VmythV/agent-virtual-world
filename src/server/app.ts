@@ -80,6 +80,30 @@ export async function buildServer(deps: AppDeps): Promise<FastifyInstance> {
     return eventLog.history(id);
   });
 
+  // The "god" command channel (docs/architecture.md §2.4): the human
+  // observer issues an instruction to a specific agent (or all agents when
+  // agentId is omitted). It's appended as a normal event — so it's
+  // auditable and replayable — and the scheduler surfaces it into the
+  // target's next Observation.instruction. Targeted instructions get
+  // visibleTo:[agentId] so they don't leak into other agents' histories;
+  // the human god always sees every instruction via the unfiltered log.
+  app.post("/api/worlds/:id/instructions", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!worldStore.get(id)) return reply.code(404).send({ error: `world "${id}" not found` });
+    const body = req.body as { agentId?: string; text?: string };
+    if (!body.text || typeof body.text !== "string") {
+      return reply.code(400).send({ error: "text is required" });
+    }
+    const targetAgentId = body.agentId || null;
+    const event = eventLog.append(id, {
+      type: "god.instruction",
+      payload: { targetAgentId, text: body.text },
+      visibleTo: targetAgentId ? [targetAgentId] : undefined,
+      highlight: true,
+    });
+    return reply.code(201).send(event);
+  });
+
   app.post("/api/worlds", async (req, reply) => {
     const body = req.body as { template: string; agentIds: string[]; config: Record<string, unknown> };
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { AgentVisualState, WorldEvent, WorldSummary, WsMessage } from "./types";
-import { fetchWorlds } from "./api";
+import { fetchWorlds, sendInstruction } from "./api";
 import { Stage3D, resolveStageLayout, type AgentPlacement } from "./Stage3D";
 import { Aquarium3D, type FishSnapshot, type TankSize } from "./Aquarium3D";
 
@@ -36,6 +36,9 @@ function WorldView() {
   const [agentStates, setAgentStates] = useState<Record<string, AgentVisualState>>({});
   const [roundLabel, setRoundLabel] = useState<string | undefined>();
   const [aquarium, setAquarium] = useState<AquariumView | undefined>();
+  const [instrTarget, setInstrTarget] = useState("");
+  const [instrText, setInstrText] = useState("");
+  const [instrSending, setInstrSending] = useState(false);
   const listEndRef = useRef<HTMLDivElement>(null);
   const revertTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -159,6 +162,20 @@ function WorldView() {
     setAgentStates((prev) => ({ ...prev, [agentId]: { ...(prev[agentId] ?? { state: "idle" }), dead: true } }));
   }
 
+  async function handleSendInstruction(e: React.FormEvent) {
+    e.preventDefault();
+    if (!worldId || !instrText.trim()) return;
+    setInstrSending(true);
+    try {
+      await sendInstruction(worldId, instrText.trim(), instrTarget || undefined);
+      setInstrText("");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setInstrSending(false);
+    }
+  }
+
   const selectedWorld = worlds.find((w) => w.id === worldId);
 
   return (
@@ -210,6 +227,28 @@ function WorldView() {
                 <span>{status}</span>
               </div>
             </header>
+
+            {selectedWorld.status === "running" && (
+              <form className="god-bar" onSubmit={handleSendInstruction}>
+                <span className="god-bar-label">上帝指令</span>
+                <select value={instrTarget} onChange={(e) => setInstrTarget(e.target.value)}>
+                  <option value="">广播给所有 Agent</option>
+                  {selectedWorld.agentIds.map((id) => (
+                    <option key={id} value={id}>
+                      发给 {id}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={instrText}
+                  onChange={(e) => setInstrText(e.target.value)}
+                  placeholder="对 Agent 发号施令，会出现在它下一次决策的观测里…"
+                />
+                <button type="submit" disabled={instrSending || !instrText.trim()}>
+                  发送
+                </button>
+              </form>
+            )}
 
             {viewMode === "stage" ? (
               aquarium ? (

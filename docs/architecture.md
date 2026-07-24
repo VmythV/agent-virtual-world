@@ -76,12 +76,18 @@ interface WorldEvent {
 - 展示侧通过 WebSocket 订阅实时事件流，或通过 REST 拉取历史事件做回放，两者复用同一套渲染逻辑。
 - 「重大事件」通过事件的 `type` 或额外的 `highlight: true` 标记，供时间轴 UI 单独标出。
 
-### 2.4 上帝干预 vs 世界自治
+### 2.4 上帝干预 vs 世界自治（已实现）
 
-用户/管理者的指令不直接篡改世界状态，而是作为一条特殊事件（`type: "god.instruction"`）注入事件流，并在下一次相关 Agent 的 `Observation.instruction` 中出现。这样保证：
+用户/管理者的指令不直接篡改世界状态，而是作为一条特殊事件（`type: "god.instruction"`，payload `{ targetAgentId, text }`）注入事件流，并在下一次相关 Agent 的 `Observation.instruction` 中出现。这样保证：
 
 - 所有干预都可追溯、可回放。
 - 执行引擎的状态推进逻辑始终只依赖事件日志，不存在「隐藏的旁路修改」。
+
+实现要点：
+
+- **入口**：`POST /api/worlds/:id/instructions`，body `{ agentId?, text }`，`agentId` 省略即广播给所有 Agent。追加一条 `god.instruction` 事件；定向指令带 `visibleTo: [agentId]`（复用 §2.6 的可见性机制，不泄露给其他 Agent 的历史），广播则公开。追加会触发 WS 广播，人类上帝立即在时间轴看到自己发的指令。
+- **送达**：调度器每回合/每 tick 重新读事件日志，通过 `applyPendingInstructions` 把「针对当前 actor 或广播、且尚未送达过」的指令拼进 `Observation.instruction`。送达状态按 `(事件, actor)` 记账——广播对每个 Agent 各送达一次，定向只送达其目标，且都只送一次（不会每回合重复打扰）。因为调度器是重读日志而非缓存，运行中途通过 REST 注入的指令能被下一个决策的 Agent 收到。
+- **验证**：`npm run demo:god` 用真实调度器 + 事件日志确定性地验证——在 pro-1 回合中注入一条针对 con-1 的指令，断言 con-1 下一次观测收到、只收到一次、且从不泄露给 pro-1。前端在世界 `running` 时显示「上帝指令」输入条（选目标/广播 + 文本 + 发送），已用 Playwright 验证广播（公开）与定向（🔒 徽标）指令都正确出现在时间轴。
 
 ### 2.5 世界模板（可插拔规则引擎）
 

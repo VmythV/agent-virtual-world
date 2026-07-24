@@ -258,6 +258,52 @@
   text-align: left;
 }
 
+.god-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--accent-bg);
+}
+
+.god-bar-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.god-bar select,
+.god-bar input {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.god-bar input {
+  flex: 1;
+}
+
+.god-bar button {
+  font-size: 13px;
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.god-bar button[disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .timeline {
   flex: 1;
   overflow-y: auto;

@@ -1,5 +1,5 @@
 import type { EventLog } from "../core/eventLog.js";
-import type { AgentAdapter, WorldEvent, WorldState, WorldTemplate } from "../core/types.js";
+import type { AgentAdapter, Observation, WorldEvent, WorldState, WorldTemplate } from "../core/types.js";
 
 export interface RunWorldOptions<TState extends WorldState> {
   worldId: string;
@@ -48,6 +48,7 @@ async function runTurnBased<TState extends WorldState>(
   persisted: WorldEvent[],
 ): Promise<void> {
   const { worldId, template, agents, eventLog, maxSteps = 200 } = options;
+  const deliveredInstructions = new Set<string>();
 
   let steps = 0;
   while (!template.isFinished(state)) {
@@ -85,6 +86,9 @@ async function runTurnBased<TState extends WorldState>(
     // sees the raw, unredacted history regardless of what agents see.
     const history = eventLog.history(worldId).filter((e) => !e.visibleTo || e.visibleTo.includes(actorId));
     const observation = template.buildObservation(actorId, state, history);
+    // Re-read from the log each turn, so a god instruction that arrived
+    // mid-run is surfaced to its target's next Observation.
+    applyPendingInstructions(observation, history, actorId, deliveredInstructions);
     const action = await agent.act(observation);
     const { events } = template.applyAction(actorId, action, state);
 
@@ -100,6 +104,7 @@ async function runTickBased<TState extends WorldState>(
   persisted: WorldEvent[],
 ): Promise<void> {
   const { worldId, template, agents, eventLog, maxSteps = 5000, tickIntervalMs = 0 } = options;
+  const deliveredInstructions = new Set<string>();
 
   if (!template.actorsForTick || !template.advanceTick) {
     throw new Error(`runWorld: tick-based template ${template.id} must implement actorsForTick + advanceTick`);
@@ -123,6 +128,7 @@ async function runTickBased<TState extends WorldState>(
       }
       const history = eventLog.history(worldId).filter((e) => !e.visibleTo || e.visibleTo.includes(actorId));
       const observation = template.buildObservation(actorId, state, history);
+      applyPendingInstructions(observation, history, actorId, deliveredInstructions);
       const action = await agent.act(observation);
       const { events } = template.applyAction(actorId, action, state);
       for (const event of events) {
@@ -142,4 +148,33 @@ async function runTickBased<TState extends WorldState>(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Surfaces "god" instructions (docs/architecture.md §2.4) into the current
+ * actor's Observation.instruction: any god.instruction event in this
+ * actor's (already visibleTo-filtered) history that targets this actor —
+ * or is a broadcast (targetAgentId null) — and hasn't been delivered to
+ * them yet. `delivered` is keyed per (event, actor) so a broadcast reaches
+ * every agent exactly once and a targeted instruction only its target.
+ */
+function applyPendingInstructions(
+  observation: Observation,
+  history: WorldEvent[],
+  actorId: string,
+  delivered: Set<string>,
+): void {
+  const parts: string[] = [];
+  for (const event of history) {
+    if (event.type !== "god.instruction") continue;
+    const target = event.payload.targetAgentId as string | null | undefined;
+    if (target && target !== actorId) continue;
+    const key = `${event.id}::${actorId}`;
+    if (delivered.has(key)) continue;
+    delivered.add(key);
+    if (typeof event.payload.text === "string") parts.push(event.payload.text);
+  }
+  if (parts.length > 0) {
+    observation.instruction = [observation.instruction, ...parts].filter(Boolean).join("\n");
+  }
 }

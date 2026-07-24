@@ -16,7 +16,7 @@ export interface WorldEvent {
   visibleTo?: string[];
 }
 
-export type WorldStatus = "running" | "finished" | "failed";
+export type WorldStatus = "running" | "finished" | "failed" | "stopped";
 
 export interface WorldSummary {
   id: string;

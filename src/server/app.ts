@@ -23,6 +23,10 @@ export async function buildServer(deps: AppDeps): Promise<FastifyInstance> {
   const { eventLog, agentStore, worldStore, cliPool } = deps;
   const app = Fastify({ logger: true });
 
+  // Abort controllers for worlds currently running in memory, so they can be
+  // stopped/deleted mid-run.
+  const running = new Map<string, AbortController>();
+
   await app.register(cors, { origin: true });
   await app.register(websocketPlugin);
 
@@ -59,6 +63,10 @@ export async function buildServer(deps: AppDeps): Promise<FastifyInstance> {
 
   app.delete("/api/agents/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
+    const inUseBy = worldStore.list().find((w) => w.status === "running" && w.agentIds.includes(id));
+    if (inUseBy) {
+      return reply.code(409).send({ error: `agent "${id}" is in use by running world ${inUseBy.id}` });
+    }
     if (!agentStore.remove(id)) return reply.code(404).send({ error: `agent "${id}" not found` });
     return reply.code(204).send();
   });
@@ -137,14 +145,35 @@ export async function buildServer(deps: AppDeps): Promise<FastifyInstance> {
     // worlds get a wall-clock interval so live viewers can watch the
     // simulation play out instead of it completing in milliseconds.
     const tickIntervalMs = template.scheduling === "tick-based" ? 150 : undefined;
-    runWorld({ worldId, template, config: body.config, agents, eventLog, tickIntervalMs })
-      .then(() => worldStore.markFinished(worldId))
+    const controller = new AbortController();
+    running.set(worldId, controller);
+    runWorld({ worldId, template, config: body.config, agents, eventLog, tickIntervalMs, signal: controller.signal })
+      .then(() => (controller.signal.aborted ? worldStore.markStopped(worldId) : worldStore.markFinished(worldId)))
       .catch((err: unknown) => {
         app.log.error(err);
         worldStore.markFailed(worldId, err instanceof Error ? err.message : String(err));
-      });
+      })
+      .finally(() => running.delete(worldId));
 
     return reply.code(202).send(record);
+  });
+
+  app.post("/api/worlds/:id/stop", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const controller = running.get(id);
+    if (!controller) return reply.code(409).send({ error: `world "${id}" is not running` });
+    controller.abort();
+    return reply.code(202).send({ id, status: "stopping" });
+  });
+
+  app.delete("/api/worlds/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!worldStore.get(id)) return reply.code(404).send({ error: `world "${id}" not found` });
+    running.get(id)?.abort(); // stop it first if still running
+    running.delete(id);
+    worldStore.remove(id);
+    eventLog.deleteWorld(id);
+    return reply.code(204).send();
   });
 
   // --- Live event feed -----------------------------------------------------

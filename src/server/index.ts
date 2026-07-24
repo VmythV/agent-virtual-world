@@ -14,6 +14,12 @@ async function main() {
   const agentStore = new AgentStore(db);
   const worldStore = new WorldStore(db);
 
+  // Worlds run in memory; anything still 'running' in the DB at startup was
+  // orphaned by a previous shutdown/crash and can never resume, so reconcile
+  // it to 'failed' rather than leaving it stuck.
+  const reconciled = worldStore.failStaleRunning("服务重启，运行中的世界已中断");
+  if (reconciled > 0) console.log(`Reconciled ${reconciled} stale running world(s) to failed on startup`);
+
   // No maxCalls here (unlike the one-shot demo script): this pool lives for
   // the server's whole lifetime, so a lifetime call budget would eventually
   // lock every CLI agent out permanently. Per-call cost is still bounded by

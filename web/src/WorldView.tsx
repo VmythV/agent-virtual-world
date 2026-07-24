@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { AgentVisualState, WorldEvent, WorldSummary, WsMessage } from "./types";
-import { fetchWorlds, sendInstruction } from "./api";
+import { deleteWorld, fetchWorlds, sendInstruction, stopWorld } from "./api";
 import { Stage3D, resolveStageLayout, type AgentPlacement } from "./Stage3D";
 import { Aquarium3D, type FishSnapshot, type TankSize } from "./Aquarium3D";
 
@@ -246,6 +246,29 @@ function WorldView() {
     }
   }
 
+  async function handleStop() {
+    if (!worldId) return;
+    try {
+      await stopWorld(worldId);
+      refreshWorldStatus(worldId);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function handleDelete() {
+    if (!worldId) return;
+    if (!window.confirm("删除这个世界及其全部事件？此操作不可恢复。")) return;
+    try {
+      await deleteWorld(worldId);
+      const remaining = worlds.filter((w) => w.id !== worldId);
+      setWorlds(remaining);
+      navigate(remaining[0] ? `/world/${remaining[0].id}` : "/", { replace: true });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   const selectedWorld = worlds.find((w) => w.id === worldId);
 
   const shown: ShownView = replay
@@ -303,12 +326,27 @@ function WorldView() {
                 >
                   {replay ? "退出回放" : "回放"}
                 </button>
+                {selectedWorld.status === "running" && (
+                  <button className="run-ctrl stop" onClick={handleStop}>
+                    终止
+                  </button>
+                )}
+                <button className="run-ctrl delete" onClick={handleDelete}>
+                  删除
+                </button>
                 <span className={`dot status-${selectedWorld.status}`} />
                 <span>{selectedWorld.status}</span>
                 <span className={`dot ws-${status}`} title={`WebSocket: ${status}`} />
                 <span>{status}</span>
               </div>
             </header>
+
+            {(selectedWorld.status === "failed" || selectedWorld.status === "stopped") && (
+              <div className={`world-banner ${selectedWorld.status}`}>
+                {selectedWorld.status === "failed" ? "世界运行失败" : "世界已被终止"}
+                {selectedWorld.error ? `：${selectedWorld.error}` : ""}
+              </div>
+            )}
 
             {selectedWorld.status === "running" && (
               <form className="god-bar" onSubmit={handleSendInstruction}>

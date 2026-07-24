@@ -70,3 +70,14 @@ export async function sendInstruction(worldId: string, text: string, agentId?: s
     }),
   );
 }
+
+export async function stopWorld(worldId: string): Promise<void> {
+  await handleJson(await fetch(`/api/worlds/${worldId}/stop`, { method: "POST" }));
+}
+
+export async function deleteWorld(worldId: string): Promise<void> {
+  const res = await fetch(`/api/worlds/${worldId}`, { method: "DELETE" });
+  if (res.ok || res.status === 204) return;
+  const body = await res.json().catch(() => undefined);
+  throw new Error((body && body.error) || `request failed: ${res.status}`);
+}

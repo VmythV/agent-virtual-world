@@ -15,6 +15,11 @@ export interface RunWorldOptions<TState extends WorldState> {
    * live; with it the WS streams tick snapshots at a human pace.
    */
   tickIntervalMs?: number;
+  /**
+   * Cooperative cancellation: when aborted, the loop stops cleanly between
+   * steps and runWorld resolves. The caller can then mark the world stopped.
+   */
+  signal?: AbortSignal;
 }
 
 /**
@@ -47,11 +52,12 @@ async function runTurnBased<TState extends WorldState>(
   state: TState,
   persisted: WorldEvent[],
 ): Promise<void> {
-  const { worldId, template, maxSteps = 200 } = options;
+  const { worldId, template, signal, maxSteps = 200 } = options;
   const deliveredInstructions = new Set<string>();
 
   let steps = 0;
   while (!template.isFinished(state)) {
+    if (signal?.aborted) return;
     if (steps >= maxSteps) {
       throw new Error(
         `runWorld: exceeded maxSteps (${maxSteps}) for world ${worldId} using template ${template.id}`,
@@ -83,7 +89,7 @@ async function runTickBased<TState extends WorldState>(
   state: TState,
   persisted: WorldEvent[],
 ): Promise<void> {
-  const { worldId, template, eventLog, maxSteps = 5000, tickIntervalMs = 0 } = options;
+  const { worldId, template, eventLog, signal, maxSteps = 5000, tickIntervalMs = 0 } = options;
   const deliveredInstructions = new Set<string>();
 
   if (!template.actorsForTick || !template.advanceTick) {
@@ -92,6 +98,7 @@ async function runTickBased<TState extends WorldState>(
 
   let ticks = 0;
   while (!template.isFinished(state)) {
+    if (signal?.aborted) return;
     if (ticks >= maxSteps) {
       throw new Error(
         `runWorld: exceeded maxSteps (${maxSteps}) for tick-based world ${worldId} using template ${template.id}`,

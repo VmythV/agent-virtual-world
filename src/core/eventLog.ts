@@ -74,6 +74,12 @@ export class EventLog extends EventEmitter {
     return rows.map(rowToEvent);
   }
 
+  /** Deletes all events for a world (used when a world is deleted). */
+  deleteWorld(worldId: string): void {
+    this.db.prepare(`DELETE FROM events WHERE world_id = ?`).run(worldId);
+    this.sequenceCounters.delete(worldId);
+  }
+
   private nextSequence(worldId: string): number {
     const current = this.sequenceCounters.get(worldId) ?? this.loadMaxSequence(worldId);
     const next = current + 1;

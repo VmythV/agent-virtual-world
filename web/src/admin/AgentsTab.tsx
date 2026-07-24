@@ -240,6 +240,12 @@ function AgentsTab() {
                       placeholder={"/absolute/path/to/script.mjs"}
                     />
                   </label>
+                  {relativeScriptArgs(form.customArgsText).length > 0 && (
+                    <div className="form-warning">
+                      ⚠ 检测到疑似相对路径参数：{relativeScriptArgs(form.customArgsText).join("、")}
+                      。CLI 进程运行在每次调用新建的临时沙箱目录里，相对路径会解析失败——请改用绝对路径。
+                    </div>
+                  )}
                 </>
               )}
             </>
@@ -321,6 +327,14 @@ function formToConfig(form: FormState): AgentConfig {
       args: form.customArgsText.split("\n").map((s) => s.trim()).filter(Boolean),
     },
   };
+}
+
+/** Args that look like a script path but aren't absolute — they'll break in the sandbox cwd. */
+function relativeScriptArgs(argsText: string): string[] {
+  return argsText
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((s) => s && !s.startsWith("-") && !s.startsWith("/") && !s.startsWith("~") && /[\/.]|\.(mjs|js|cjs|ts|py|sh)$/.test(s) && (s.includes("/") || /\.(mjs|js|cjs|ts|py|sh)$/.test(s)));
 }
 
 function summarize(config: AgentConfig): string {

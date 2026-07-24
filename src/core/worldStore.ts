@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-export type WorldStatus = "running" | "finished" | "failed";
+export type WorldStatus = "running" | "finished" | "failed" | "stopped";
 
 export interface WorldRecord {
   id: string;
@@ -77,6 +77,29 @@ export class WorldStore {
     this.db
       .prepare(`UPDATE worlds SET status = 'failed', error = ?, finished_at = ? WHERE id = ?`)
       .run(error, new Date().toISOString(), id);
+  }
+
+  markStopped(id: string): void {
+    this.db
+      .prepare(`UPDATE worlds SET status = 'stopped', finished_at = ? WHERE id = ?`)
+      .run(new Date().toISOString(), id);
+  }
+
+  remove(id: string): boolean {
+    return this.db.prepare(`DELETE FROM worlds WHERE id = ?`).run(id).changes > 0;
+  }
+
+  /**
+   * Worlds run in memory (fire-and-forget); a server restart orphans any
+   * that were still 'running'. Call on startup to mark them failed instead
+   * of leaving them stuck forever. Returns how many were reconciled.
+   */
+  failStaleRunning(error: string): number {
+    return Number(
+      this.db
+        .prepare(`UPDATE worlds SET status = 'failed', error = ?, finished_at = ? WHERE status = 'running'`)
+        .run(error, new Date().toISOString()).changes,
+    );
   }
 }
 

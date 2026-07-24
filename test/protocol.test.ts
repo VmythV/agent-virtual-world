@@ -5,6 +5,7 @@ import {
   expectedChoices,
   expectedResponseShape,
   parseChoiceResponse,
+  parseNumberResponse,
 } from "../src/core/protocol.js";
 import type { Observation } from "../src/core/types.js";
 
@@ -47,6 +48,19 @@ describe("expected* accessors", () => {
   });
 });
 
+describe("parseNumberResponse", () => {
+  it("extracts a plain number", () => {
+    expect(parseNumberResponse("80")).toBe(80);
+  });
+  it("extracts a number from noisy / currency text", () => {
+    expect(parseNumberResponse("我出价 $1,250 元")).toBe(1250);
+    expect(parseNumberResponse("bid: 42.5")).toBe(42.5);
+  });
+  it("falls back to 0 when there's no number", () => {
+    expect(parseNumberResponse("pass")).toBe(0);
+  });
+});
+
 describe("buildActionPayload", () => {
   it("produces {text} for text responses", () => {
     expect(buildActionPayload(obs({}), "  hello  ")).toEqual({ text: "hello" });
@@ -56,6 +70,10 @@ describe("buildActionPayload", () => {
     const o = obs({ responseShape: "choice", choices: ["a", "b"] });
     expect(buildActionPayload(o, "b")).toEqual({ target: "b" });
     expect(buildActionPayload(o, "nonsense")).toEqual({ target: "a" });
+  });
+
+  it("produces {amount} for number responses", () => {
+    expect(buildActionPayload(obs({ responseShape: "number" }), "出价 55")).toEqual({ amount: 55 });
   });
 
   it("falls back to text when choice shape has no choices", () => {

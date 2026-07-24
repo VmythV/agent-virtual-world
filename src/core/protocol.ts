@@ -11,14 +11,14 @@ export function expectedActionType(observation: Observation, fallback = "speak")
   return visible?.expectedActionType ?? fallback;
 }
 
-export type ResponseShape = "text" | "choice";
+export type ResponseShape = "text" | "choice" | "number";
 
 /**
  * "text": the agent's raw output becomes payload.text (speaking, summaries,
  * verdicts). "choice": the agent must pick one of `expectedChoices()` and
- * the raw output becomes payload.target instead — used for actions like a
- * werewolf's kill vote or a vote-phase ballot where a free-text answer
- * isn't a valid action.
+ * the raw output becomes payload.target. "number": the raw output is parsed
+ * into payload.amount — used for actions like a sealed-bid auction where the
+ * action is a quantity, not free text or a fixed option.
  */
 export function expectedResponseShape(observation: Observation): ResponseShape {
   const visible = observation.visibleState as { responseShape?: ResponseShape } | undefined;
@@ -42,10 +42,13 @@ export function buildPrompt(observation: Observation): string {
   const instructionText = observation.instruction ? `\n\n上帝指令: ${observation.instruction}` : "";
   const choices = expectedChoices(observation);
 
-  const responseInstruction =
-    expectedResponseShape(observation) === "choice" && choices && choices.length > 0
-      ? `请从以下候选项中选择一个，只输出该候选项本身，不要输出任何其他文字：${choices.join(" / ")}`
-      : "请给出你的发言内容（纯文本，直接输出，不要额外解释）。";
+  const shape = expectedResponseShape(observation);
+  let responseInstruction = "请给出你的发言内容（纯文本，直接输出，不要额外解释）。";
+  if (shape === "choice" && choices && choices.length > 0) {
+    responseInstruction = `请从以下候选项中选择一个，只输出该候选项本身，不要输出任何其他文字：${choices.join(" / ")}`;
+  } else if (shape === "number") {
+    responseInstruction = "请只输出一个数字（你的出价/数值），不要输出任何其他文字。";
+  }
 
   return [
     `当前世界状态: ${JSON.stringify(observation.visibleState)}`,
@@ -73,14 +76,28 @@ export function parseChoiceResponse(rawText: string, choices: string[]): string 
 }
 
 /**
+ * Extracts the first number from a raw response (models often wrap it in
+ * words/currency despite instructions). Falls back to 0 so one unparseable
+ * response can't crash the world run.
+ */
+export function parseNumberResponse(rawText: string): number {
+  const match = rawText.replace(/,/g, "").match(/-?\d+(\.\d+)?/);
+  return match ? Number(match[0]) : 0;
+}
+
+/**
  * Shared by every text-generating adapter (API, CLI, mock): turns a raw
  * response string into the right AgentAction payload shape for this
- * Observation — {text} normally, {target} when a choice was expected.
+ * Observation — {text} normally, {target} for a choice, {amount} for a number.
  */
 export function buildActionPayload(observation: Observation, rawText: string): Record<string, unknown> {
+  const shape = expectedResponseShape(observation);
   const choices = expectedChoices(observation);
-  if (expectedResponseShape(observation) === "choice" && choices && choices.length > 0) {
+  if (shape === "choice" && choices && choices.length > 0) {
     return { target: parseChoiceResponse(rawText, choices) };
+  }
+  if (shape === "number") {
+    return { amount: parseNumberResponse(rawText) };
   }
   return { text: rawText.trim() };
 }

@@ -14,6 +14,7 @@
     "demo:solve": "tsx src/demo/runProblemSolving.ts",
     "demo:concurrency": "tsx src/demo/runConcurrency.ts",
     "demo:humanlab": "tsx src/demo/runHumanLab.ts",
+    "demo:auction": "tsx src/demo/runAuction.ts",
     "server": "tsx src/server/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

@@ -71,6 +71,44 @@ describe("aquarium template (tick-based)", () => {
   });
 });
 
+describe("auction template — sealed bids + numeric actions", () => {
+  it("highest bidder wins at their price; sealed bids stay private", async () => {
+    const alice = new MockAgentAdapter({ agentId: "alice", responses: ["90", "70"] });
+    const events = await run(
+      "auction",
+      { items: ["itemA", "itemB"], valuations: { alice: 100, bob: 80 } },
+      new Map<string, AgentAdapter>([
+        ["alice", alice],
+        ["bob", mock("bob", ["75", "78"])],
+      ]),
+    );
+    const results = events.filter((e) => e.type === "auction.result");
+    expect(results).toHaveLength(2);
+    expect(results[0].payload.winner).toBe("alice");
+    expect(results[0].payload.price).toBe(90); // first-price
+    expect(results[1].payload.winner).toBe("bob"); // 78 > alice's 70
+
+    // alice's observation never contains bob's sealed bid.
+    const leaked = alice.lastObservation!.history.filter(
+      (e: WorldEvent) => e.type === "bid.placed" && e.actorId !== "alice",
+    );
+    expect(leaked).toHaveLength(0);
+  });
+
+  it("clamps a bid to the bidder's valuation (no overbidding above value)", async () => {
+    const events = await run(
+      "auction",
+      { items: ["x"], valuations: { a: 50, b: 40 } },
+      new Map<string, AgentAdapter>([
+        ["a", mock("a", ["9999"])], // tries to overbid
+        ["b", mock("b", ["30"])],
+      ]),
+    );
+    const result = events.find((e) => e.type === "auction.result");
+    expect(result!.payload.price).toBe(50); // clamped to valuation
+  });
+});
+
 describe("human-lab template — private personas", () => {
   it("keeps each person's persona private and runs to an observer summary", async () => {
     const alice = new MockAgentAdapter({ agentId: "alice", responses: ["hi", "hi2"] });

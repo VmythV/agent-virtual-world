@@ -27,6 +27,8 @@ const ROLE_COLOR: Record<StageRole, string> = {
   expert: "#2dd4bf",
   participant: "#818cf8",
   observer: "#f59e0b",
+  bidder: "#2dd4bf",
+  auctioneer: "#f59e0b",
 };
 
 const DEAD_COLOR = "#4b5563";

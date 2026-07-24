@@ -19,7 +19,9 @@ export type StageRole =
   | "coordinator"
   | "expert"
   | "participant"
-  | "observer";
+  | "observer"
+  | "bidder"
+  | "auctioneer";
 
 export interface AgentPlacement {
   agentId: string;
@@ -121,6 +123,23 @@ export function resolveWerewolfLayout(
   });
 }
 
+/** Auction: bidders in a front row facing the auctioneer upstage center. */
+export function resolveAuctionLayout(worldCreatedPayload: Record<string, unknown> | undefined): AgentPlacement[] {
+  if (!worldCreatedPayload) return [];
+  const bidders = (worldCreatedPayload.bidders as string[] | undefined) ?? [];
+  const auctioneer = worldCreatedPayload.auctioneer as string | undefined;
+  const placements: AgentPlacement[] = [];
+
+  bidders.forEach((agentId, i) => {
+    const spread = bidders.length > 1 ? i / (bidders.length - 1) - 0.5 : 0;
+    placements.push({ agentId, role: "bidder", position: [spread * 5, 0, -0.5] });
+  });
+  if (auctioneer) {
+    placements.push({ agentId: auctioneer, role: "auctioneer", position: [0, 0, -4.4] });
+  }
+  return placements;
+}
+
 /** Dispatches to the right layout by which keys are present — no template name needed. */
 export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   const created = history.find((e) => e.type === "world.created");
@@ -130,6 +149,7 @@ export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   if ("scenario" in created.payload) return resolveHumanLabLayout(created.payload);
   if ("participants" in created.payload) return resolveDiscussionLayout(created.payload);
   if ("experts" in created.payload) return resolveProblemLayout(created.payload);
+  if ("bidders" in created.payload) return resolveAuctionLayout(created.payload);
   if ("players" in created.payload) {
     const rolesEvent = history.find((e) => e.type === "roles.assigned");
     return resolveWerewolfLayout(created.payload, rolesEvent?.payload);

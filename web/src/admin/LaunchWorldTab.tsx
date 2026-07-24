@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { StoredAgent } from "../types";
 import { createWorld, listAgents } from "../api";
 
-type Template = "debate" | "discussion" | "werewolf" | "aquarium" | "problem-solving" | "human-lab";
+type Template = "debate" | "discussion" | "werewolf" | "aquarium" | "problem-solving" | "human-lab" | "auction";
 
 function LaunchWorldTab() {
   const navigate = useNavigate();
@@ -39,6 +39,11 @@ function LaunchWorldTab() {
   const [scenario, setScenario] = useState("囚徒困境的重复博弈：每一轮各自选择合作或背叛。");
   const [personas, setPersonas] = useState<Record<string, string>>({});
   const [observer, setObserver] = useState("");
+
+  // auction-only
+  const [itemsText, setItemsText] = useState("古董花瓶\n限量球鞋");
+  const [valuations, setValuations] = useState<Record<string, string>>({});
+  const [auctioneer, setAuctioneer] = useState("");
 
   const [error, setError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
@@ -104,7 +109,7 @@ function LaunchWorldTab() {
       }
       agentIds = Array.from(new Set([coordinator, ...experts.filter((e) => e !== coordinator)]));
       config = { problem, coordinator, experts: experts.filter((e) => e !== coordinator) };
-    } else {
+    } else if (template === "human-lab") {
       const withPersona = Object.entries(personas).filter(([, v]) => v.trim() && observer !== undefined);
       const chosen = withPersona.filter(([id]) => id !== observer);
       if (chosen.length === 0) {
@@ -114,6 +119,23 @@ function LaunchWorldTab() {
       const personaMap = Object.fromEntries(chosen.map(([id, v]) => [id, v.trim()]));
       agentIds = Array.from(new Set([...Object.keys(personaMap), ...(observer ? [observer] : [])]));
       config = { scenario, rounds, personas: personaMap, observer: observer || undefined };
+    } else {
+      const items = itemsText.split("\n").map((s) => s.trim()).filter(Boolean);
+      if (items.length === 0) {
+        setError("至少需要一件拍品");
+        return;
+      }
+      const valMap = Object.fromEntries(
+        Object.entries(valuations)
+          .filter(([id, v]) => id !== auctioneer && v.trim() && Number(v) > 0)
+          .map(([id, v]) => [id, Number(v)]),
+      );
+      if (Object.keys(valMap).length < 2) {
+        setError("至少需要两个竞拍者（各给一个估值）");
+        return;
+      }
+      agentIds = Array.from(new Set([...Object.keys(valMap), ...(auctioneer ? [auctioneer] : [])]));
+      config = { items, valuations: valMap, auctioneer: auctioneer || undefined };
     }
 
     setSubmitting(true);
@@ -142,6 +164,7 @@ function LaunchWorldTab() {
             <option value="aquarium">水族箱</option>
             <option value="problem-solving">做题世界（工具编排）</option>
             <option value="human-lab">人性实验室</option>
+            <option value="auction">密封拍卖</option>
           </select>
         </label>
 
@@ -390,6 +413,46 @@ function LaunchWorldTab() {
             </label>
             <p className="muted-cell">
               每个参与者只知道自己的性格（复用狼人杀那套 visibleTo 隐藏机制），上帝视角在时间轴能看到所有人的性格设定。
+            </p>
+          </>
+        )}
+
+        {template === "auction" && (
+          <>
+            <label>
+              拍品（每行一件，按顺序逐件密封竞拍）
+              <textarea rows={3} value={itemsText} onChange={(e) => setItemsText(e.target.value)} />
+            </label>
+            <fieldset>
+              <legend>竞拍者与其（私密）估值</legend>
+              {agents
+                .filter((a) => a.config.agentId !== auctioneer)
+                .map((a) => (
+                  <div key={a.config.agentId} className="persona-row">
+                    <span style={{ minWidth: 90 }}>{a.config.agentId}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={valuations[a.config.agentId] ?? ""}
+                      onChange={(e) => setValuations({ ...valuations, [a.config.agentId]: e.target.value })}
+                      placeholder="估值（留空则不参与）"
+                    />
+                  </div>
+                ))}
+            </fieldset>
+            <label>
+              拍卖师（可选，居中主持，不参与出价）
+              <select value={auctioneer} onChange={(e) => setAuctioneer(e.target.value)}>
+                <option value="">无拍卖师</option>
+                {agents.map((a) => (
+                  <option key={a.config.agentId} value={a.config.agentId}>
+                    {a.config.agentId}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="muted-cell">
+              密封投标：所有竞拍者同时私密出一个数字（复用并发批 + visibleTo），最高者中标、按其出价成交（第一价）。每人只知自己的估值，上帝视角可见全部出价。
             </p>
           </>
         )}

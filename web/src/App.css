@@ -477,6 +477,41 @@
   font-size: 13px;
 }
 
+.event-row.has-diff {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.event-row-main {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.diff-block {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  background: var(--code-bg);
+  border-radius: 6px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.diff-line {
+  white-space: pre;
+}
+.diff-line.add {
+  color: var(--ok);
+}
+.diff-line.del {
+  color: var(--err);
+}
+.diff-line.hunk {
+  color: var(--accent);
+}
+
 .event-row.highlight {
   border-color: var(--accent);
   background: var(--accent-bg);

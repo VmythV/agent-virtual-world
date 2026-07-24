@@ -31,6 +31,17 @@ export function expectedChoices(observation: Observation): string[] | undefined 
 }
 
 /**
+ * A shared, persistent working directory the CLI agent should run in
+ * (instead of a fresh per-call sandbox), when the world template provides
+ * one — this is what lets multiple coding agents collaborate on the same
+ * files across turns. See docs/architecture.md §2.2.
+ */
+export function expectedWorkspaceDir(observation: Observation): string | undefined {
+  const visible = observation.visibleState as { workspaceDir?: string } | undefined;
+  return visible?.workspaceDir;
+}
+
+/**
  * Renders an Observation as plain text. Shared by every text-oriented
  * adapter (API or CLI) so the same world state produces the same prompt
  * regardless of which kind of agent is reading it.

@@ -24,7 +24,8 @@ export type StageRole =
   | "auctioneer"
   | "prosecution"
   | "defense"
-  | "witness";
+  | "witness"
+  | "builder";
 
 export interface AgentPlacement {
   agentId: string;
@@ -162,6 +163,16 @@ export function resolveCourtroomLayout(worldCreatedPayload: Record<string, unkno
   return placements;
 }
 
+/** Collaborative build: builders line up in a front row (a "team" at the workbench). */
+export function resolveCollabLayout(worldCreatedPayload: Record<string, unknown> | undefined): AgentPlacement[] {
+  if (!worldCreatedPayload) return [];
+  const builders = (worldCreatedPayload.builders as string[] | undefined) ?? [];
+  return builders.map((agentId, i) => {
+    const spread = builders.length > 1 ? i / (builders.length - 1) - 0.5 : 0;
+    return { agentId, role: "builder" as const, position: [spread * 5, 0, -1.5] };
+  });
+}
+
 /** Dispatches to the right layout by which keys are present — no template name needed. */
 export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   const created = history.find((e) => e.type === "world.created");
@@ -173,6 +184,7 @@ export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   if ("experts" in created.payload) return resolveProblemLayout(created.payload);
   if ("bidders" in created.payload) return resolveAuctionLayout(created.payload);
   if ("prosecutor" in created.payload) return resolveCourtroomLayout(created.payload);
+  if ("builders" in created.payload && "task" in created.payload) return resolveCollabLayout(created.payload);
   if ("players" in created.payload) {
     const rolesEvent = history.find((e) => e.type === "roles.assigned");
     return resolveWerewolfLayout(created.payload, rolesEvent?.payload);

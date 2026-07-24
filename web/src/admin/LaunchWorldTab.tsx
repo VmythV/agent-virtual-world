@@ -12,7 +12,8 @@ type Template =
   | "human-lab"
   | "auction"
   | "ecosystem"
-  | "courtroom";
+  | "courtroom"
+  | "collab-build";
 
 function LaunchWorldTab() {
   const navigate = useNavigate();
@@ -65,6 +66,10 @@ function LaunchWorldTab() {
   const [defenseCounsel, setDefenseCounsel] = useState("");
   const [judgeAgent, setJudgeAgent] = useState("");
   const [testimonies, setTestimonies] = useState<Record<string, string>>({});
+
+  // collab-build-only
+  const [task, setTask] = useState("共同写出一个项目进度文档 progress.md");
+  const [builders, setBuilders] = useState<string[]>([]);
 
   const [error, setError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
@@ -166,7 +171,7 @@ function LaunchWorldTab() {
       }
       agentIds = Array.from(new Set([...preds, ...preyIds]));
       config = { predators: preds, prey: preyIds, ticks: ecoTicks };
-    } else {
+    } else if (template === "courtroom") {
       if (!prosecutor || !defenseCounsel || !judgeAgent) {
         setError("需要指定控方、辩方和法官");
         return;
@@ -178,6 +183,13 @@ function LaunchWorldTab() {
       );
       agentIds = Array.from(new Set([prosecutor, defenseCounsel, judgeAgent, ...Object.keys(witnesses)]));
       config = { caseTitle, prosecutor, defense: defenseCounsel, judge: judgeAgent, witnesses, rounds };
+    } else {
+      if (builders.length === 0) {
+        setError("至少需要一个 builder（建议用 CLI 适配器的 Agent 才能真正写文件）");
+        return;
+      }
+      agentIds = builders;
+      config = { task, builders, rounds };
     }
 
     setSubmitting(true);
@@ -209,6 +221,7 @@ function LaunchWorldTab() {
             <option value="auction">密封拍卖</option>
             <option value="ecosystem">生态（捕食-猎物）</option>
             <option value="courtroom">法庭</option>
+            <option value="collab-build">协作编码（共享工作区）</option>
           </select>
         </label>
 
@@ -593,6 +606,35 @@ function LaunchWorldTab() {
             </fieldset>
             <p className="muted-cell">
               证人先各自作证（其私密事实作证后才公开，复用 visibleTo），控辩双方按轮辩论，最后法官裁决。
+            </p>
+          </>
+        )}
+
+        {template === "collab-build" && (
+          <>
+            <label>
+              任务
+              <textarea rows={2} value={task} onChange={(e) => setTask(e.target.value)} />
+            </label>
+            <label>
+              每人轮到几次
+              <input type="number" min={1} max={5} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} />
+            </label>
+            <fieldset>
+              <legend>Builder（按勾选顺序轮流在同一工作区里干活）</legend>
+              {agents.map((a) => (
+                <label key={a.config.agentId} className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={builders.includes(a.config.agentId)}
+                    onChange={() => toggle(builders, setBuilders, a.config.agentId)}
+                  />
+                  {a.config.agentId} <span className="muted-cell">({a.config.adapter})</span>
+                </label>
+              ))}
+            </fieldset>
+            <p className="muted-cell">
+              首个需要「跨回合共享持久工作区」的场景：模板建一个 git 工作区，每个 builder 的 CLI 进程都在同一目录里干活（而非各自沙箱），每步提交并把 diff 显示在时间轴。要真正写代码，请给 builder 用 <code>cli</code> 适配器（claude-code 预设或 custom 命令）。
             </p>
           </>
         )}

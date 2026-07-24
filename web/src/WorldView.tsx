@@ -451,25 +451,48 @@ function EventRow({
   current?: boolean;
   rowRef?: React.Ref<HTMLDivElement>;
 }) {
+  const diff = event.type === "build.step" ? (event.payload.diff as string | undefined) : undefined;
   return (
     <div
       ref={rowRef}
-      className={`event-row${event.highlight ? " highlight" : ""}${current ? " cursor" : ""}${dim ? " dim" : ""}`}
+      className={`event-row${event.highlight ? " highlight" : ""}${current ? " cursor" : ""}${dim ? " dim" : ""}${diff ? " has-diff" : ""}`}
     >
-      <span className="event-seq">#{event.sequence}</span>
-      <span className="event-type">{event.type}</span>
-      {event.actorId && <span className="event-actor">{event.actorId}</span>}
-      <span className="event-payload">{renderPayload(event)}</span>
-      {event.visibleTo && (
-        <span className="event-private" title={event.visibleTo.length ? `仅 ${event.visibleTo.join(", ")} 可见` : "任何 Agent 都看不到，仅上帝视角可见"}>
-          🔒 {event.visibleTo.length ? event.visibleTo.join(",") : "无 Agent"} 可见
-        </span>
-      )}
+      <div className="event-row-main">
+        <span className="event-seq">#{event.sequence}</span>
+        <span className="event-type">{event.type}</span>
+        {event.actorId && <span className="event-actor">{event.actorId}</span>}
+        <span className="event-payload">{renderPayload(event)}</span>
+        {event.visibleTo && (
+          <span className="event-private" title={event.visibleTo.length ? `仅 ${event.visibleTo.join(", ")} 可见` : "任何 Agent 都看不到，仅上帝视角可见"}>
+            🔒 {event.visibleTo.length ? event.visibleTo.join(",") : "无 Agent"} 可见
+          </span>
+        )}
+      </div>
+      {diff && <DiffBlock diff={diff} />}
     </div>
   );
 }
 
+function DiffBlock({ diff }: { diff: string }) {
+  return (
+    <pre className="diff-block">
+      {diff.split("\n").map((line, i) => {
+        const cls = line.startsWith("+") && !line.startsWith("+++") ? "add" : line.startsWith("-") && !line.startsWith("---") ? "del" : line.startsWith("@@") ? "hunk" : "";
+        return (
+          <div key={i} className={`diff-line ${cls}`}>
+            {line || " "}
+          </div>
+        );
+      })}
+    </pre>
+  );
+}
+
 function renderPayload(event: WorldEvent): string {
+  if (event.type === "build.step") {
+    const p = event.payload as { message?: string; stat?: string };
+    return `${p.message ?? ""}${p.stat ? `  (${p.stat.replace(/\n/g, "; ")})` : ""}`;
+  }
   if (typeof event.payload.text === "string") {
     return event.payload.text;
   }

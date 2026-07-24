@@ -32,6 +32,7 @@ const ROLE_COLOR: Record<StageRole, string> = {
   prosecution: "#3b82f6",
   defense: "#ef4444",
   witness: "#94a3b8",
+  builder: "#22d3ee",
 };
 
 const DEAD_COLOR = "#4b5563";

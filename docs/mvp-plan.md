@@ -45,7 +45,9 @@
 5. **Phase 4 — 展示侧（先文本后 3D）**：
    - **纯文本时间轴**（已完成）：`web/`（Vite + React + TS），左侧世界列表（状态用红/黄/绿点区分 running/failed/finished）、右侧事件时间轴（连接 `/ws/worlds/:id`，`highlight` 事件加边框强调）。Vite dev server 代理 `/api`、`/ws` 到后端 `:4000`。已用 headless Chromium 实测：8 条事件正确渲染、WS 状态显示 `open`、控制台无报错，截图确认可读性符合预期。
    - 实测中发现一个真实的沙箱坑：`CliAgentAdapter` 的子进程 `cwd` 是 `withSandboxDir` 生成的临时目录而不是项目根目录，所以 `custom` 预设的 `command`/`args` 里引用脚本必须用**绝对路径**——相对路径会在临时目录下解析失败。已记录在 `docs/architecture.md`。
-   - **Three.js 舞台 + Avatar 状态机**：待做，见下一步。
+   - **Three.js 舞台 + Avatar 状态机**（已完成）：`web/src/Stage3D.tsx`（`@react-three/fiber` + `drei`）。通用 Avatar 状态机 `idle → thinking → speaking → idle`：胶囊体 + 球形头，按角色着色（正方蓝/反方红/裁判金），`useFrame` 驱动的呼吸感 bob 动画随状态调整幅度/速度，`Html` 锚定姓名标签、`思考中…` 徽标、发言气泡。`resolveDebateLayout()` 直接从事件流里 `world.created` 事件的 payload（`sides`/`judge`）推导舞台站位，不需要额外的 REST 调用。主面板新增「3D 舞台 / 时间轴」切换。
+   - 引擎侧配合新增 `turn.started` 事件（`src/engine/scheduler.ts` 在 `agent.act()` 之前 append），否则前端只能在真实 CLI/API 调用返回后才知道"轮到谁了"，看不到"正在思考"的过程。
+   - 用真实 `claude-code` 预设跑通端到端验证（headless Chromium + Playwright）：提前打开页面建立 WS 连接后再创建世界，稳定捕捉到 `思考中…` 徽标和发言气泡（先用创建后开浏览器的顺序测试时，浏览器启动的开销经常让整局已经跑完，只能看到收尾）；同时发现并修复两个真实问题——① 世界状态在前端是「进入页面时拉一次 REST」的快照，不会随事件流更新，导致跑完之后头部一直显示 `running`，改成收到每条实时事件都顺带刷新一次 `GET /api/worlds/:id`；② 发言气泡用 `max-width` 时在 3D 场景里被压缩到几乎一字一行，改成固定 `width` 解决。
 6. **Phase 5 — 管理侧**：Agent CRUD、发起辩论（题目/双方/轮次）的表单与运行控制界面。
 7. **Phase 6+**：新增世界模板——讨论组（复用辩论骨架）→ 狼人杀（隐藏信息 + 投票，检验协议扩展性）→ 鱼缸（tick-based 调度，检验连续模拟场景）。
 

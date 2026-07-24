@@ -47,6 +47,10 @@ export async function runWorld<TState extends WorldState>(
       throw new Error(`runWorld: no agent adapter registered for actor "${actorId}"`);
     }
 
+    // Emitted before the (possibly slow, real CLI/API) call so clients can
+    // show "this agent is deciding now" instead of only seeing the result.
+    persisted.push(eventLog.append(worldId, { type: "turn.started", actorId, payload: {} }));
+
     const history = eventLog.history(worldId);
     const observation = template.buildObservation(actorId, state, history);
     const action = await agent.act(observation);

@@ -27,3 +27,11 @@ export interface WorldSummary {
 }
 
 export type WsMessage = { type: "history"; events: WorldEvent[] } | { type: "event"; event: WorldEvent };
+
+/** Generic avatar state machine shared by every world template's 3D stage (docs/architecture.md §3.1). */
+export type AvatarState = "idle" | "thinking" | "speaking";
+
+export interface AgentVisualState {
+  state: AvatarState;
+  text?: string;
+}

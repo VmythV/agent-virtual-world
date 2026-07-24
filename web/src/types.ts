@@ -35,3 +35,20 @@ export interface AgentVisualState {
   state: AvatarState;
   text?: string;
 }
+
+/** Mirrors src/core/agentConfig.ts. */
+export type CliInvocationConfig =
+  | { preset: "claude-code"; systemPrompt?: string; model?: string; maxBudgetUsd?: number; extraArgs?: string[] }
+  | { preset: "custom"; command: string; args?: string[] };
+
+export type AgentConfig =
+  | { agentId: string; adapter: "api"; systemPrompt: string; model?: string }
+  | { agentId: string; adapter: "mock"; responses: string[] }
+  | { agentId: string; adapter: "cli"; cli: CliInvocationConfig };
+
+/** Mirrors src/core/agentStore.ts. */
+export interface StoredAgent {
+  config: AgentConfig;
+  createdAt: string;
+  updatedAt: string;
+}

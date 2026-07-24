@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { openDatabase } from "../core/db.js";
 import { EventLog } from "../core/eventLog.js";
 import type { AgentAdapter } from "../core/types.js";
 import type { AgentConfig } from "../core/agentConfig.js";
@@ -67,7 +68,8 @@ function cliAgentConfig(agentId: string, side: DebateSide): AgentConfig {
 
 async function main() {
   const worldId = randomUUID();
-  const eventLog = new EventLog("data/events.db");
+  const db = openDatabase("data/events.db");
+  const eventLog = new EventLog(db);
   const cliPool = new RuntimePool({ maxConcurrent: 2, timeoutMs: 90_000, maxCalls: 20 });
 
   const agentConfigs: AgentConfig[] = [
@@ -117,7 +119,7 @@ async function main() {
     `CliAgentAdapter 运行统计: ${JSON.stringify(cliPool.stats)} (调用次数/并发/排队情况，来自 RuntimePool)`,
   );
 
-  eventLog.close();
+  db.close();
 
   if (!persistedCorrectly) {
     process.exit(1);

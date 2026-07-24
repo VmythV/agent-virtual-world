@@ -1,4 +1,5 @@
-import { DatabaseSync } from "node:sqlite";
+import { EventEmitter } from "node:events";
+import type { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import type { NewWorldEvent, WorldEvent } from "./types.js";
 
@@ -7,16 +8,18 @@ import type { NewWorldEvent, WorldEvent } from "./types.js";
  * everything that happens in a world; the world view and replay both read
  * from here instead of talking to the execution engine directly.
  *
- * Uses node:sqlite (built into Node 22.5+) to avoid a native-module
- * dependency for the MVP. Swap for a proper driver if this becomes a
- * bottleneck.
+ * Takes a shared DatabaseSync (see core/db.ts) so it can live alongside
+ * AgentStore/WorldStore in one SQLite file. Emits "appended" on every
+ * append() so the server's WebSocket layer can broadcast live events
+ * without polling.
  */
-export class EventLog {
+export class EventLog extends EventEmitter {
   private db: DatabaseSync;
   private sequenceCounters = new Map<string, number>();
 
-  constructor(dbPath: string) {
-    this.db = new DatabaseSync(dbPath);
+  constructor(db: DatabaseSync) {
+    super();
+    this.db = db;
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS events (
         id TEXT PRIMARY KEY,
@@ -58,6 +61,7 @@ export class EventLog {
         full.highlight ? 1 : 0,
       );
 
+    this.emit("appended", full);
     return full;
   }
 
@@ -66,10 +70,6 @@ export class EventLog {
       .prepare(`SELECT * FROM events WHERE world_id = ? ORDER BY sequence ASC`)
       .all(worldId) as unknown as SqliteEventRow[];
     return rows.map(rowToEvent);
-  }
-
-  close(): void {
-    this.db.close();
   }
 
   private nextSequence(worldId: string): number {

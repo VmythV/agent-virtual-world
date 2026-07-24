@@ -90,12 +90,16 @@ const PHASE_LABELS: Record<string, string> = {
   night: "🌙 夜晚",
   "day-discuss": "☀️ 白天·讨论",
   "day-vote": "☀️ 白天·投票",
+  testimony: "⚖️ 证人作证",
+  argument: "⚖️ 控辩辩论",
+  verdict: "⚖️ 宣判",
 };
 
 export function formatRoundLabel(event: WorldEvent): string {
   if (event.type === "phase.start") {
     const phase = event.payload.phase as string;
-    return `${PHASE_LABELS[phase] ?? phase} · 第 ${event.payload.round} 轮`;
+    const label = PHASE_LABELS[phase] ?? phase;
+    return event.payload.round !== undefined ? `${label} · 第 ${event.payload.round} 轮` : label;
   }
   const total = event.payload.totalRounds;
   return `第 ${event.payload.round}${total ? ` / ${total}` : ""} 轮`;

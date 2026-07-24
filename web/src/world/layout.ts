@@ -21,7 +21,10 @@ export type StageRole =
   | "participant"
   | "observer"
   | "bidder"
-  | "auctioneer";
+  | "auctioneer"
+  | "prosecution"
+  | "defense"
+  | "witness";
 
 export interface AgentPlacement {
   agentId: string;
@@ -140,6 +143,25 @@ export function resolveAuctionLayout(worldCreatedPayload: Record<string, unknown
   return placements;
 }
 
+/** Courtroom: prosecution left, defense right, judge upstage center, witnesses front center. */
+export function resolveCourtroomLayout(worldCreatedPayload: Record<string, unknown> | undefined): AgentPlacement[] {
+  if (!worldCreatedPayload) return [];
+  const prosecutor = worldCreatedPayload.prosecutor as string | undefined;
+  const defense = worldCreatedPayload.defense as string | undefined;
+  const judge = worldCreatedPayload.judge as string | undefined;
+  const witnesses = (worldCreatedPayload.witnesses as string[] | undefined) ?? [];
+  const placements: AgentPlacement[] = [];
+
+  if (prosecutor) placements.push({ agentId: prosecutor, role: "prosecution", position: [-3, 0, -1.5] });
+  if (defense) placements.push({ agentId: defense, role: "defense", position: [3, 0, -1.5] });
+  if (judge) placements.push({ agentId: judge, role: "judge", position: [0, 0, -4.6] });
+  witnesses.forEach((agentId, i) => {
+    const spread = witnesses.length > 1 ? i / (witnesses.length - 1) - 0.5 : 0;
+    placements.push({ agentId, role: "witness", position: [spread * 2.4, 0, 0.8] });
+  });
+  return placements;
+}
+
 /** Dispatches to the right layout by which keys are present — no template name needed. */
 export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   const created = history.find((e) => e.type === "world.created");
@@ -150,6 +172,7 @@ export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   if ("participants" in created.payload) return resolveDiscussionLayout(created.payload);
   if ("experts" in created.payload) return resolveProblemLayout(created.payload);
   if ("bidders" in created.payload) return resolveAuctionLayout(created.payload);
+  if ("prosecutor" in created.payload) return resolveCourtroomLayout(created.payload);
   if ("players" in created.payload) {
     const rolesEvent = history.find((e) => e.type === "roles.assigned");
     return resolveWerewolfLayout(created.payload, rolesEvent?.payload);

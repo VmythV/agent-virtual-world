@@ -29,6 +29,9 @@ const ROLE_COLOR: Record<StageRole, string> = {
   observer: "#f59e0b",
   bidder: "#2dd4bf",
   auctioneer: "#f59e0b",
+  prosecution: "#3b82f6",
+  defense: "#ef4444",
+  witness: "#94a3b8",
 };
 
 const DEAD_COLOR = "#4b5563";

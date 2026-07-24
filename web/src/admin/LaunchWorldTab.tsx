@@ -11,7 +11,8 @@ type Template =
   | "problem-solving"
   | "human-lab"
   | "auction"
-  | "ecosystem";
+  | "ecosystem"
+  | "courtroom";
 
 function LaunchWorldTab() {
   const navigate = useNavigate();
@@ -57,6 +58,13 @@ function LaunchWorldTab() {
   const [predators, setPredators] = useState<string[]>([]);
   const [prey, setPrey] = useState<string[]>([]);
   const [ecoTicks, setEcoTicks] = useState(60);
+
+  // courtroom-only
+  const [caseTitle, setCaseTitle] = useState("国家 诉 被告：盗窃案");
+  const [prosecutor, setProsecutor] = useState("");
+  const [defenseCounsel, setDefenseCounsel] = useState("");
+  const [judgeAgent, setJudgeAgent] = useState("");
+  const [testimonies, setTestimonies] = useState<Record<string, string>>({});
 
   const [error, setError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
@@ -149,7 +157,7 @@ function LaunchWorldTab() {
       }
       agentIds = Array.from(new Set([...Object.keys(valMap), ...(auctioneer ? [auctioneer] : [])]));
       config = { items, valuations: valMap, auctioneer: auctioneer || undefined };
-    } else {
+    } else if (template === "ecosystem") {
       const preds = predators.filter((id) => !prey.includes(id));
       const preyIds = prey.filter((id) => !predators.includes(id));
       if (preds.length === 0 || preyIds.length === 0) {
@@ -158,6 +166,18 @@ function LaunchWorldTab() {
       }
       agentIds = Array.from(new Set([...preds, ...preyIds]));
       config = { predators: preds, prey: preyIds, ticks: ecoTicks };
+    } else {
+      if (!prosecutor || !defenseCounsel || !judgeAgent) {
+        setError("需要指定控方、辩方和法官");
+        return;
+      }
+      const witnesses = Object.fromEntries(
+        Object.entries(testimonies)
+          .filter(([id, v]) => v.trim() && ![prosecutor, defenseCounsel, judgeAgent].includes(id))
+          .map(([id, v]) => [id, v.trim()]),
+      );
+      agentIds = Array.from(new Set([prosecutor, defenseCounsel, judgeAgent, ...Object.keys(witnesses)]));
+      config = { caseTitle, prosecutor, defense: defenseCounsel, judge: judgeAgent, witnesses, rounds };
     }
 
     setSubmitting(true);
@@ -188,6 +208,7 @@ function LaunchWorldTab() {
             <option value="human-lab">人性实验室</option>
             <option value="auction">密封拍卖</option>
             <option value="ecosystem">生态（捕食-猎物）</option>
+            <option value="courtroom">法庭</option>
           </select>
         </label>
 
@@ -514,6 +535,64 @@ function LaunchWorldTab() {
             </label>
             <p className="muted-cell">
               tick 制连续模拟：捕食者追捕、猎物逃跑，捕食转移能量、无食物则饿死；某一方灭绝或达到 tick 上限即结束。
+            </p>
+          </>
+        )}
+
+        {template === "courtroom" && (
+          <>
+            <label>
+              案由
+              <input required value={caseTitle} onChange={(e) => setCaseTitle(e.target.value)} />
+            </label>
+            <div className="persona-row">
+              <span style={{ minWidth: 60 }}>控方</span>
+              <select value={prosecutor} onChange={(e) => setProsecutor(e.target.value)}>
+                <option value="">选择</option>
+                {agents.map((a) => (
+                  <option key={a.config.agentId} value={a.config.agentId}>{a.config.agentId}</option>
+                ))}
+              </select>
+            </div>
+            <div className="persona-row">
+              <span style={{ minWidth: 60 }}>辩方</span>
+              <select value={defenseCounsel} onChange={(e) => setDefenseCounsel(e.target.value)}>
+                <option value="">选择</option>
+                {agents.map((a) => (
+                  <option key={a.config.agentId} value={a.config.agentId}>{a.config.agentId}</option>
+                ))}
+              </select>
+            </div>
+            <div className="persona-row">
+              <span style={{ minWidth: 60 }}>法官</span>
+              <select value={judgeAgent} onChange={(e) => setJudgeAgent(e.target.value)}>
+                <option value="">选择</option>
+                {agents.map((a) => (
+                  <option key={a.config.agentId} value={a.config.agentId}>{a.config.agentId}</option>
+                ))}
+              </select>
+            </div>
+            <label>
+              辩论轮次
+              <input type="number" min={1} max={6} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} />
+            </label>
+            <fieldset>
+              <legend>证人与其（私密）掌握的事实</legend>
+              {agents
+                .filter((a) => ![prosecutor, defenseCounsel, judgeAgent].includes(a.config.agentId))
+                .map((a) => (
+                  <div key={a.config.agentId} className="persona-row">
+                    <span style={{ minWidth: 90 }}>{a.config.agentId}</span>
+                    <input
+                      value={testimonies[a.config.agentId] ?? ""}
+                      onChange={(e) => setTestimonies({ ...testimonies, [a.config.agentId]: e.target.value })}
+                      placeholder="该证人私密掌握的事实（留空则不作为证人）"
+                    />
+                  </div>
+                ))}
+            </fieldset>
+            <p className="muted-cell">
+              证人先各自作证（其私密事实作证后才公开，复用 visibleTo），控辩双方按轮辩论，最后法官裁决。
             </p>
           </>
         )}

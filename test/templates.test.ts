@@ -131,6 +131,39 @@ describe("human-lab template — private personas", () => {
   });
 });
 
+describe("courtroom template", () => {
+  it("witnesses testify (privately-known facts), then arguments, then a verdict", async () => {
+    const w1 = new MockAgentAdapter({ agentId: "w1", responses: ["testimony-1"] });
+    const events = await run(
+      "courtroom",
+      {
+        caseTitle: "C",
+        prosecutor: "pro",
+        defense: "def",
+        judge: "j",
+        witnesses: { w1: "secret-1", w2: "secret-2" },
+        rounds: 2,
+      },
+      new Map<string, AgentAdapter>([
+        ["pro", mock("pro", ["p1", "p2"])],
+        ["def", mock("def", ["d1", "d2"])],
+        ["j", mock("j", ["verdict"])],
+        ["w1", w1],
+        ["w2", mock("w2", ["testimony-2"])],
+      ]),
+    );
+    expect(events.filter((e) => e.type === "testimony")).toHaveLength(2);
+    expect(events.filter((e) => e.type === "agent.speak")).toHaveLength(4); // 2 sides x 2 rounds
+    expect(events.at(-1)!.type).toBe("world.verdict");
+
+    // w1 never sees w2's private knowledge before testifying.
+    const leaked = w1.lastObservation!.history.filter(
+      (e: WorldEvent) => e.type === "knowledge.assigned" && e.actorId !== "w1",
+    );
+    expect(leaked).toHaveLength(0);
+  });
+});
+
 describe("ecosystem template (tick-based)", () => {
   it("predators eat prey and the sim terminates with a valid outcome", async () => {
     const predators = ["fox-1", "fox-2"];

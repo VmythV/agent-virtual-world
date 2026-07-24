@@ -7,6 +7,7 @@ import { problemSolvingWorldTemplate } from "./problemSolvingWorldTemplate.js";
 import { humanLabWorldTemplate } from "./humanLabWorldTemplate.js";
 import { auctionWorldTemplate } from "./auctionWorldTemplate.js";
 import { ecosystemWorldTemplate } from "./ecosystemWorldTemplate.js";
+import { courtroomWorldTemplate } from "./courtroomWorldTemplate.js";
 
 export const worldTemplates: Record<string, WorldTemplate<WorldState>> = {
   debate: debateWorldTemplate as unknown as WorldTemplate<WorldState>,
@@ -17,6 +18,7 @@ export const worldTemplates: Record<string, WorldTemplate<WorldState>> = {
   "human-lab": humanLabWorldTemplate as unknown as WorldTemplate<WorldState>,
   auction: auctionWorldTemplate as unknown as WorldTemplate<WorldState>,
   ecosystem: ecosystemWorldTemplate as unknown as WorldTemplate<WorldState>,
+  courtroom: courtroomWorldTemplate as unknown as WorldTemplate<WorldState>,
 };
 
 export function getWorldTemplate(id: string): WorldTemplate<WorldState> | undefined {

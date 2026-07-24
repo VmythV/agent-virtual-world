@@ -24,6 +24,45 @@ function aquariumFromHistory(history: WorldEvent[]): AquariumView | undefined {
   return { tank, fish, tick };
 }
 
+interface ShownView {
+  aquarium?: AquariumView;
+  placements: AgentPlacement[];
+  agentStates: Record<string, AgentVisualState>;
+  roundLabel?: string;
+}
+
+/**
+ * Replay is "free" from event sourcing: fold the events up to a cursor into
+ * exactly the same view shape live rendering uses, so the 3D view + labels
+ * show the world as it was at that moment. Works for every template because
+ * they all reduce to an event stream.
+ */
+function reconstructView(events: WorldEvent[], cursor: number): ShownView {
+  const upto = events.slice(0, cursor + 1);
+
+  const aquarium = aquariumFromHistory(upto);
+  const placements = resolveStageLayout(upto);
+  const dead = collectDeadAgentIds(upto);
+
+  const agentStates: Record<string, AgentVisualState> = Object.fromEntries(
+    placements.map((p) => [p.agentId, { state: "idle" as const, dead: dead.has(p.agentId) }]),
+  );
+
+  // Freeze the actor of the cursor event in its thinking/speaking pose so the
+  // paused frame reads like that moment rather than an all-idle stage.
+  const last = upto[upto.length - 1];
+  if (last?.actorId && agentStates[last.actorId] && !dead.has(last.actorId)) {
+    const text = typeof last.payload.text === "string" ? last.payload.text : undefined;
+    if (last.type === "turn.started") agentStates[last.actorId] = { state: "thinking", dead: false };
+    else if (text) agentStates[last.actorId] = { state: "speaking", text, dead: false };
+  }
+
+  const lastRound = [...upto].reverse().find((e) => e.type === "round.start" || e.type === "phase.start");
+  const roundLabel = lastRound ? formatRoundLabel(lastRound) : undefined;
+
+  return { aquarium, placements, agentStates, roundLabel };
+}
+
 function WorldView() {
   const { worldId } = useParams<{ worldId?: string }>();
   const navigate = useNavigate();
@@ -39,7 +78,12 @@ function WorldView() {
   const [instrTarget, setInstrTarget] = useState("");
   const [instrText, setInstrText] = useState("");
   const [instrSending, setInstrSending] = useState(false);
+  const [replay, setReplay] = useState(false);
+  const [cursor, setCursor] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
   const listEndRef = useRef<HTMLDivElement>(null);
+  const cursorRowRef = useRef<HTMLDivElement>(null);
   const revertTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const loadWorlds = () => {
@@ -65,6 +109,9 @@ function WorldView() {
     setStatus("connecting");
     setRoundLabel(undefined);
     setAquarium(undefined);
+    setReplay(false);
+    setPlaying(false);
+    setCursor(0);
     Object.values(revertTimers.current).forEach(clearTimeout);
     revertTimers.current = {};
 
@@ -122,8 +169,31 @@ function WorldView() {
   }
 
   useEffect(() => {
+    if (replay) return; // in replay, follow the cursor instead of the live tail
     listEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [events]);
+  }, [events, replay]);
+
+  // Replay playback: advance the cursor on a timer while playing.
+  useEffect(() => {
+    if (!replay || !playing) return;
+    if (cursor >= events.length - 1) {
+      setPlaying(false);
+      return;
+    }
+    const id = setTimeout(() => setCursor((c) => Math.min(events.length - 1, c + 1)), 250 / speed);
+    return () => clearTimeout(id);
+  }, [replay, playing, cursor, speed, events.length]);
+
+  // Keep the cursor row in view while replaying the timeline.
+  useEffect(() => {
+    if (replay && viewMode === "timeline") cursorRowRef.current?.scrollIntoView({ block: "center" });
+  }, [replay, cursor, viewMode]);
+
+  function enterReplay() {
+    setReplay(true);
+    setPlaying(false);
+    setCursor(0);
+  }
 
   function applyLiveEvent(event: WorldEvent) {
     if (event.type === "round.start" || event.type === "phase.start") {
@@ -178,6 +248,11 @@ function WorldView() {
 
   const selectedWorld = worlds.find((w) => w.id === worldId);
 
+  const shown: ShownView = replay
+    ? reconstructView(events, cursor)
+    : { aquarium, placements, agentStates, roundLabel };
+  const cursorEvent = replay ? events[cursor] : undefined;
+
   return (
     <div className="layout">
       <aside className="sidebar">
@@ -221,6 +296,13 @@ function WorldView() {
                     时间轴
                   </button>
                 </div>
+                <button
+                  className={`replay-toggle${replay ? " active" : ""}`}
+                  onClick={() => (replay ? setReplay(false) : enterReplay())}
+                  disabled={events.length === 0}
+                >
+                  {replay ? "退出回放" : "回放"}
+                </button>
                 <span className={`dot status-${selectedWorld.status}`} />
                 <span>{selectedWorld.status}</span>
                 <span className={`dot ws-${status}`} title={`WebSocket: ${status}`} />
@@ -250,16 +332,53 @@ function WorldView() {
               </form>
             )}
 
+            {replay && (
+              <div className="replay-bar">
+                <button onClick={() => setPlaying((p) => !p)}>{playing ? "⏸" : "▶"}</button>
+                <input
+                  type="range"
+                  min={0}
+                  max={Math.max(0, events.length - 1)}
+                  value={cursor}
+                  onChange={(e) => {
+                    setPlaying(false);
+                    setCursor(Number(e.target.value));
+                  }}
+                />
+                <span className="replay-pos">
+                  {cursor + 1} / {events.length}
+                </span>
+                <div className="replay-speeds">
+                  {[1, 2, 4].map((s) => (
+                    <button key={s} className={speed === s ? "active" : ""} onClick={() => setSpeed(s)}>
+                      {s}x
+                    </button>
+                  ))}
+                </div>
+                {cursorEvent && <span className="replay-cursor-type">{cursorEvent.type}</span>}
+              </div>
+            )}
+
             {viewMode === "stage" ? (
-              aquarium ? (
-                <Aquarium3D tank={aquarium.tank} fish={aquarium.fish} tickLabel={`第 ${aquarium.tick} tick`} />
+              shown.aquarium ? (
+                <Aquarium3D
+                  tank={shown.aquarium.tank}
+                  fish={shown.aquarium.fish}
+                  tickLabel={`第 ${shown.aquarium.tick} tick`}
+                />
               ) : (
-                <Stage3D placements={placements} agentStates={agentStates} roundLabel={roundLabel} />
+                <Stage3D placements={shown.placements} agentStates={shown.agentStates} roundLabel={shown.roundLabel} />
               )
             ) : (
               <div className="timeline">
-                {events.map((event) => (
-                  <EventRow key={event.id} event={event} />
+                {events.map((event, i) => (
+                  <EventRow
+                    key={event.id}
+                    event={event}
+                    dim={replay && i > cursor}
+                    current={replay && i === cursor}
+                    rowRef={replay && i === cursor ? cursorRowRef : undefined}
+                  />
                 ))}
                 {events.length === 0 && <div className="empty-state">等待事件...</div>}
                 <div ref={listEndRef} />
@@ -301,9 +420,22 @@ function collectDeadAgentIds(history: WorldEvent[]): Set<string> {
   return dead;
 }
 
-function EventRow({ event }: { event: WorldEvent }) {
+function EventRow({
+  event,
+  dim,
+  current,
+  rowRef,
+}: {
+  event: WorldEvent;
+  dim?: boolean;
+  current?: boolean;
+  rowRef?: React.Ref<HTMLDivElement>;
+}) {
   return (
-    <div className={`event-row${event.highlight ? " highlight" : ""}`}>
+    <div
+      ref={rowRef}
+      className={`event-row${event.highlight ? " highlight" : ""}${current ? " cursor" : ""}${dim ? " dim" : ""}`}
+    >
       <span className="event-seq">#{event.sequence}</span>
       <span className="event-type">{event.type}</span>
       {event.actorId && <span className="event-actor">{event.actorId}</span>}

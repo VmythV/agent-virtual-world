@@ -106,7 +106,7 @@ interface WorldTemplate {
 - **turn-based**：调度器按顺序等待相关 Agent 响应后再推进（辩论、讨论组、狼人杀）。模板实现 `nextActor`/`buildObservation`/`applyAction`。
 - **tick-based**（已实现，鱼缸验证）：调度器按固定墙钟节奏推进，模板实现 `actorsForTick`（本 tick 哪些 Agent 需要决策，通常大多数 tick 为空）+ `advanceTick`（确定性物理推进 + 产出快照事件）。`RunWorldOptions.tickIntervalMs` 控制 tick 间隔，让 mock 模拟也能被实时观看。人性实验室这类场景未来也归此类。
 
-「做题世界」这类没有空间/角色平等互动概念的场景，更接近工具编排而非「世界模拟」，建议作为一种特殊的、无空间概念的世界模板对待，而不强行套用角色站位等展示逻辑。
+「做题世界」这类没有空间/角色平等互动概念的场景，更接近工具编排而非「世界模拟」（已实现，见 `problemSolvingWorldTemplate.ts`）：由一个「协调者」（即最初设想里的「世界管理者」）反复决定把问题派给哪个专家 Agent（一个 choice 动作：选专家或 FINALIZE），各专家给出贡献，协调者最后汇总出 `world.answer`。它复用同一套 `WorldTemplate` + choice 动作协议，只是 `nextActor` 体现的是「管理者指挥」而非平等轮流；由 `maxConsultations` 兜底保证终止。展示侧仍给了 3D 站位（协调者居中金色、专家一排青色），并未因为它「非空间」就特殊对待——事实证明统一的 Avatar 舞台足够表达这种编排关系。它还天然和上帝指令通道联动：给协调者发一条高层指令，就是「管理者代为指挥执行」。
 
 ### 2.6 隐藏信息（狼人杀验证过的设计）
 

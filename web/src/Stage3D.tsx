@@ -4,7 +4,16 @@ import { Html, OrbitControls } from "@react-three/drei";
 import type { Group } from "three";
 import type { AgentVisualState, AvatarState, WorldEvent } from "./types";
 
-export type StageRole = "pro" | "con" | "judge" | "other" | "werewolf" | "villager" | "seer";
+export type StageRole =
+  | "pro"
+  | "con"
+  | "judge"
+  | "other"
+  | "werewolf"
+  | "villager"
+  | "seer"
+  | "coordinator"
+  | "expert";
 
 export interface AgentPlacement {
   agentId: string;
@@ -20,6 +29,8 @@ const ROLE_COLOR: Record<StageRole, string> = {
   werewolf: "#dc2626",
   villager: "#38bdf8",
   seer: "#a855f7",
+  coordinator: "#f59e0b",
+  expert: "#2dd4bf",
 };
 
 const DEAD_COLOR = "#4b5563";
@@ -74,6 +85,27 @@ export function resolveDiscussionLayout(worldCreatedPayload: Record<string, unkn
 }
 
 /**
+ * Problem-solving world layout: the coordinator (manager) stands upstage
+ * center, the expert "tools" line up in a front row facing it — reads as a
+ * coordinator directing a panel of specialists rather than peers debating.
+ */
+export function resolveProblemLayout(worldCreatedPayload: Record<string, unknown> | undefined): AgentPlacement[] {
+  if (!worldCreatedPayload) return [];
+  const coordinator = worldCreatedPayload.coordinator as string | undefined;
+  const experts = (worldCreatedPayload.experts as string[] | undefined) ?? [];
+  const placements: AgentPlacement[] = [];
+
+  experts.forEach((agentId, i) => {
+    const spread = experts.length > 1 ? i / (experts.length - 1) - 0.5 : 0;
+    placements.push({ agentId, role: "expert", position: [spread * 5, 0, -0.5] });
+  });
+  if (coordinator) {
+    placements.push({ agentId: coordinator, role: "coordinator", position: [0, 0, -4.4] });
+  }
+  return placements;
+}
+
+/**
  * Werewolf world template's stage layout: everyone stands in a circle (no
  * "sides" — the whole point is you can't tell who's who just from where
  * they're standing). Colored by role for the god view only: role.assigned
@@ -110,6 +142,7 @@ export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   if (!created) return [];
   if ("sides" in created.payload) return resolveDebateLayout(created.payload);
   if ("participants" in created.payload) return resolveDiscussionLayout(created.payload);
+  if ("experts" in created.payload) return resolveProblemLayout(created.payload);
   if ("players" in created.payload) {
     const rolesEvent = history.find((e) => e.type === "roles.assigned");
     return resolveWerewolfLayout(created.payload, rolesEvent?.payload);

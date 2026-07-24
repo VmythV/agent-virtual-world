@@ -596,6 +596,7 @@
 .agent-form textarea,
 .agent-form select,
 .launch-form input,
+.launch-form textarea,
 .launch-form select {
   font-family: inherit;
   font-size: 13px;

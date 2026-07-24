@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { StoredAgent } from "../types";
 import { createWorld, listAgents } from "../api";
 
-type Template = "debate" | "discussion" | "werewolf" | "aquarium";
+type Template = "debate" | "discussion" | "werewolf" | "aquarium" | "problem-solving";
 
 function LaunchWorldTab() {
   const navigate = useNavigate();
@@ -29,6 +29,11 @@ function LaunchWorldTab() {
   // aquarium-only
   const [fish, setFish] = useState<string[]>([]);
   const [ticks, setTicks] = useState(80);
+
+  // problem-solving-only
+  const [problem, setProblem] = useState("请解答这道结合了数值计算与图形分析的综合题。");
+  const [coordinator, setCoordinator] = useState("");
+  const [experts, setExperts] = useState<string[]>([]);
 
   const [error, setError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
@@ -76,13 +81,24 @@ function LaunchWorldTab() {
       const players = Array.from(new Set([...werewolves, ...villagers, ...(seer ? [seer] : [])]));
       agentIds = players;
       config = { players, werewolves, seer: seer || undefined };
-    } else {
+    } else if (template === "aquarium") {
       if (fish.length === 0) {
         setError("至少需要一条鱼");
         return;
       }
       agentIds = fish;
       config = { fish, ticks };
+    } else {
+      if (!coordinator) {
+        setError("需要指定一个协调者（世界管理者）");
+        return;
+      }
+      if (experts.length === 0) {
+        setError("至少需要一个专家 Agent");
+        return;
+      }
+      agentIds = Array.from(new Set([coordinator, ...experts.filter((e) => e !== coordinator)]));
+      config = { problem, coordinator, experts: experts.filter((e) => e !== coordinator) };
     }
 
     setSubmitting(true);
@@ -109,6 +125,7 @@ function LaunchWorldTab() {
             <option value="discussion">讨论组</option>
             <option value="werewolf">狼人杀</option>
             <option value="aquarium">水族箱</option>
+            <option value="problem-solving">做题世界（工具编排）</option>
           </select>
         </label>
 
@@ -280,6 +297,42 @@ function LaunchWorldTab() {
             </label>
             <p className="muted-cell">
               这是首个 tick-based（连续模拟）世界：鱼每隔几 tick 才重新决策一次游动行为，其余 tick 是确定性物理推进；服务端按固定节奏（150ms/tick）推进，可在展示侧实时观看。
+            </p>
+          </>
+        )}
+
+        {template === "problem-solving" && (
+          <>
+            <label>
+              题目
+              <textarea rows={3} value={problem} onChange={(e) => setProblem(e.target.value)} />
+            </label>
+            <label>
+              协调者（世界管理者，负责派活并汇总最终解答）
+              <select value={coordinator} onChange={(e) => setCoordinator(e.target.value)}>
+                <option value="">选择一个 Agent</option>
+                {agents.map((a) => (
+                  <option key={a.config.agentId} value={a.config.agentId}>
+                    {a.config.agentId}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <fieldset>
+              <legend>专家 / 工具 Agent</legend>
+              {agents.map((a) => (
+                <label key={a.config.agentId} className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={experts.includes(a.config.agentId)}
+                    onChange={() => toggle(experts, setExperts, a.config.agentId)}
+                  />
+                  {a.config.agentId} <span className="muted-cell">({a.config.adapter})</span>
+                </label>
+              ))}
+            </fieldset>
+            <p className="muted-cell">
+              协调者会反复决定把问题交给哪个专家、或直接汇总；你也可以在运行时用「上帝指令」给协调者下达高层任务，由它代为指挥执行。
             </p>
           </>
         )}

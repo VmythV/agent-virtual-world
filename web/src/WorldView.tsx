@@ -3,9 +3,26 @@ import { useNavigate, useParams } from "react-router-dom";
 import type { AgentVisualState, WorldEvent, WorldSummary, WsMessage } from "./types";
 import { fetchWorlds } from "./api";
 import { Stage3D, resolveStageLayout, type AgentPlacement } from "./Stage3D";
+import { Aquarium3D, type FishSnapshot, type TankSize } from "./Aquarium3D";
 
 type ConnectionStatus = "idle" | "connecting" | "open" | "closed" | "error";
 type ViewMode = "stage" | "timeline";
+
+interface AquariumView {
+  tank: TankSize;
+  fish: FishSnapshot[];
+  tick: number;
+}
+
+function aquariumFromHistory(history: WorldEvent[]): AquariumView | undefined {
+  const created = history.find((e) => e.type === "world.created");
+  if (!created || !("fish" in created.payload) || !("tank" in created.payload)) return undefined;
+  const tank = created.payload.tank as TankSize;
+  const lastTick = [...history].reverse().find((e) => e.type === "world.tick");
+  const fish = (lastTick?.payload.fish as FishSnapshot[] | undefined) ?? [];
+  const tick = (lastTick?.payload.tick as number | undefined) ?? 0;
+  return { tank, fish, tick };
+}
 
 function WorldView() {
   const { worldId } = useParams<{ worldId?: string }>();
@@ -18,6 +35,7 @@ function WorldView() {
   const [placements, setPlacements] = useState<AgentPlacement[]>([]);
   const [agentStates, setAgentStates] = useState<Record<string, AgentVisualState>>({});
   const [roundLabel, setRoundLabel] = useState<string | undefined>();
+  const [aquarium, setAquarium] = useState<AquariumView | undefined>();
   const listEndRef = useRef<HTMLDivElement>(null);
   const revertTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -43,6 +61,7 @@ function WorldView() {
     setEvents([]);
     setStatus("connecting");
     setRoundLabel(undefined);
+    setAquarium(undefined);
     Object.values(revertTimers.current).forEach(clearTimeout);
     revertTimers.current = {};
 
@@ -56,17 +75,30 @@ function WorldView() {
       const data = JSON.parse(msg.data) as WsMessage;
       if (data.type === "history") {
         setEvents(data.events);
-        const layout = resolveStageLayout(data.events);
-        setPlacements(layout);
-        const deadIds = collectDeadAgentIds(data.events);
-        setAgentStates(
-          Object.fromEntries(layout.map((p) => [p.agentId, { state: "idle" as const, dead: deadIds.has(p.agentId) }])),
-        );
-        const lastRound = [...data.events].reverse().find((e) => e.type === "round.start" || e.type === "phase.start");
-        if (lastRound) setRoundLabel(formatRoundLabel(lastRound));
+        const aquariumView = aquariumFromHistory(data.events);
+        if (aquariumView) {
+          setAquarium(aquariumView);
+        } else {
+          const layout = resolveStageLayout(data.events);
+          setPlacements(layout);
+          const deadIds = collectDeadAgentIds(data.events);
+          setAgentStates(
+            Object.fromEntries(layout.map((p) => [p.agentId, { state: "idle" as const, dead: deadIds.has(p.agentId) }])),
+          );
+          const lastRound = [...data.events].reverse().find((e) => e.type === "round.start" || e.type === "phase.start");
+          if (lastRound) setRoundLabel(formatRoundLabel(lastRound));
+        }
       } else {
         setEvents((prev) => [...prev, data.event]);
-        applyLiveEvent(data.event);
+        if (data.event.type === "world.tick") {
+          setAquarium((prev) =>
+            prev
+              ? { ...prev, fish: data.event.payload.fish as FishSnapshot[], tick: data.event.payload.tick as number }
+              : prev,
+          );
+        } else {
+          applyLiveEvent(data.event);
+        }
         // WorldSummary.status only reflects whatever REST returned when the
         // world list was fetched; refresh it as events stream in so the
         // running/finished/failed dot doesn't go stale mid-run.
@@ -166,7 +198,7 @@ function WorldView() {
               <div className="header-meta">
                 <div className="view-toggle">
                   <button className={viewMode === "stage" ? "active" : ""} onClick={() => setViewMode("stage")}>
-                    3D 舞台
+                    {aquarium ? "3D 水族箱" : "3D 舞台"}
                   </button>
                   <button className={viewMode === "timeline" ? "active" : ""} onClick={() => setViewMode("timeline")}>
                     时间轴
@@ -180,7 +212,11 @@ function WorldView() {
             </header>
 
             {viewMode === "stage" ? (
-              <Stage3D placements={placements} agentStates={agentStates} roundLabel={roundLabel} />
+              aquarium ? (
+                <Aquarium3D tank={aquarium.tank} fish={aquarium.fish} tickLabel={`第 ${aquarium.tick} tick`} />
+              ) : (
+                <Stage3D placements={placements} agentStates={agentStates} roundLabel={roundLabel} />
+              )
             ) : (
               <div className="timeline">
                 {events.map((event) => (

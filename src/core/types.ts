@@ -83,4 +83,22 @@ export interface WorldTemplate<TState extends WorldState = WorldState> {
    * during the night phase would leak their role.
    */
   visibilityForActor?(actorId: string, state: TState): string[] | undefined;
+
+  // --- tick-based scheduling (only used when scheduling === "tick-based") ---
+
+  /**
+   * Which agents should make a decision this tick (may be empty). The
+   * scheduler awaits each one's act() and applies it before advancing the
+   * simulation. Agents typically re-decide infrequently/staggered rather
+   * than every tick, so most ticks are pure deterministic physics.
+   */
+  actorsForTick?(state: TState): string[];
+
+  /**
+   * Advances the deterministic simulation by one tick after this tick's
+   * agent decisions have been applied, returning the events to persist
+   * (e.g. a world.tick snapshot). Also responsible for setting
+   * state.finished when the sim is over.
+   */
+  advanceTick?(state: TState): NewWorldEvent[];
 }

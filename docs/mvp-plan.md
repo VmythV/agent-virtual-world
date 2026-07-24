@@ -60,7 +60,12 @@
      - **协议扩展（都是小的、原则性的加法，不影响已有模板）**：`WorldEvent` 加 `visibleTo?: string[]`（`undefined`=公开，`[]`=对所有 Agent 隐藏但上帝视角仍可见）；`WorldTemplate` 加可选的 `visibilityForActor()`，让调度器能正确标记 `turn.started` 事件的可见性（连「轮到谁了」在夜晚阶段本身都可能泄密）；调度器统一按 `visibleTo` 过滤喂给 `buildObservation` 的历史，过滤逻辑不用每个模板自己写。**REST/WS 从不做这个过滤**——人类「上帝」通过管理侧/展示侧看到的永远是完整事件流，信息差只存在于 Agent 各自的 Observation 里。
      - **动作协议扩展**：狼人杀的杀人票/查验/投票都是「从候选名单里选一个」而不是自由文本，`core/protocol.ts` 加了 `expectedResponseShape`/`choices` 约定，`ApiAgentAdapter`/`CliAgentAdapter`/`MockAgentAdapter` 统一通过新的 `buildActionPayload()` 处理，解析失败时兜底选第一个候选项（不会让整局因为一次奇怪的模型输出而崩溃）。
      - **正确性验证**：`npm run demo:werewolf`——全 mock、结局可预测的一局（村民识破并投出狼人），跑完后直接断言 villager-2 的 `Observation.history` 里：没有 `roles.assigned`/`seer.result`/`night.action`、没有别人的 `role.assigned`、没有夜晚阶段狼人/预言家的 `turn.started`，但公共信息（`night.result` 等）正常可见——5 项断言全部通过。又用 Playwright 走了一遍管理控制台的狼人杀发起表单 + 3D 环形站位（按身份着色，死亡用变灰+倾倒+划线名字表示）+ 时间轴的「🔒 仅 X 可见」私密事件徽标，两边（后端断言 vs 前端展示）看到的私密事件数量完全一致，无控制台报错。
-   - 下一个：鱼缸（tick-based 调度，检验连续模拟场景——当前调度器只支持 turn-based，需要扩展一种新的调度模式）。
+   - **鱼缸/水族箱**（已完成）：`src/worldTemplates/aquariumWorldTemplate.ts`。第一个 tick-based（连续模拟）世界，回头检验了 §2.5 里「调度器要支持 tick-based」的开放项。
+     - **调度器扩展**：`runWorld` 现在按 `template.scheduling` 分派。turn-based 逻辑不变；新增 tick-based 循环——每 tick 先收集 `actorsForTick(state)` 返回的、本 tick 需要决策的 Agent（鱼每隔几 tick 才重新决策一次游动行为，所以大多数 tick 没有 Agent 调用、纯确定性物理），await 它们的决策并 `applyAction`，然后 `advanceTick(state)` 推进物理并产出 `world.tick` 快照事件。`RunWorldOptions` 加了 `tickIntervalMs`：mock 鱼的模拟本来毫秒级跑完没法看，服务端给 tick-based 世界配 150ms/tick 的墙钟节奏，WS 就能实时把快照推给观看者。
+     - **世界模板**：鱼有位置/朝向/速度/行为，每 tick 确定性移动 + 撞缸壁反弹；行为（cruise/wander/school/dart）是「从候选里选一个」的 choice 动作，复用狼人杀那套动作协议。物理用确定性伪随机（`sin` 哈希）保证可复现。
+     - **前端**：新增 `web/src/Aquarium3D.tsx`——玻璃缸线框 + 鱼（椭球身体 + 尾鳍指示朝向），`useFrame` 里把每条鱼的位置朝最新 `world.tick` 快照 lerp 过去，得到平滑游动而不是每 150ms 硬跳。`WorldView.tsx` 依据 `world.created` payload 里有没有 `fish`/`tank` 字段自动切到水族箱视图，并从实时 `world.tick` 事件更新鱼群位置。这和舞台类模板（离散 Avatar 状态）是两种不同的渲染范式，各自独立。
+     - **验证**：`npm run demo:aquarium`（无 tick 延迟、瞬时跑完）断言快照数量正确（初始 + 每 tick 各一）、事件总数有界（无失控循环）、每条鱼每个 tick 都在缸内、且确实游动了——4 项全过。又用 Playwright 走了一遍管理控制台的水族箱发起表单，实时采样 tick 横幅和鱼的坐标，确认模拟在墙钟时间里逐 tick 推进、鱼在游动、tick 40 正常结束，无控制台报错。
+   - MVP 计划里列的 6 个示例场景至此覆盖了 5 个（辩论/讨论组/狼人杀/鱼缸，外加做题世界这类「工具编排」尚未做）。剩余方向见架构文档 §5 的持续风险清单（可重置的 CLI 调用预算、回放 UI、上帝干预指令通道等）。
 
 ## 5. 验收标准（Phase 1-5 完成时）
 

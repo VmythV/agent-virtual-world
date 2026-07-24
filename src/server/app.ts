@@ -109,8 +109,11 @@ export async function buildServer(deps: AppDeps): Promise<FastifyInstance> {
     });
 
     // Runs in the background; poll GET /api/worlds/:id for status or
-    // subscribe to /ws/worlds/:id for live events as they happen.
-    runWorld({ worldId, template, config: body.config, agents, eventLog })
+    // subscribe to /ws/worlds/:id for live events as they happen. tick-based
+    // worlds get a wall-clock interval so live viewers can watch the
+    // simulation play out instead of it completing in milliseconds.
+    const tickIntervalMs = template.scheduling === "tick-based" ? 150 : undefined;
+    runWorld({ worldId, template, config: body.config, agents, eventLog, tickIntervalMs })
       .then(() => worldStore.markFinished(worldId))
       .catch((err: unknown) => {
         app.log.error(err);

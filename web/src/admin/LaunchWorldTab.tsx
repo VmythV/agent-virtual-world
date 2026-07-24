@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { StoredAgent } from "../types";
 import { createWorld, listAgents } from "../api";
 
-type Template = "debate" | "discussion" | "werewolf";
+type Template = "debate" | "discussion" | "werewolf" | "aquarium";
 
 function LaunchWorldTab() {
   const navigate = useNavigate();
@@ -25,6 +25,10 @@ function LaunchWorldTab() {
   const [werewolves, setWerewolves] = useState<string[]>([]);
   const [villagers, setVillagers] = useState<string[]>([]);
   const [seer, setSeer] = useState("");
+
+  // aquarium-only
+  const [fish, setFish] = useState<string[]>([]);
+  const [ticks, setTicks] = useState(80);
 
   const [error, setError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
@@ -60,7 +64,7 @@ function LaunchWorldTab() {
       }
       agentIds = Array.from(new Set([...participants, ...(moderator ? [moderator] : [])]));
       config = { topic, rounds, participants, moderator: moderator || undefined };
-    } else {
+    } else if (template === "werewolf") {
       if (werewolves.length === 0) {
         setError("至少需要一个狼人");
         return;
@@ -72,6 +76,13 @@ function LaunchWorldTab() {
       const players = Array.from(new Set([...werewolves, ...villagers, ...(seer ? [seer] : [])]));
       agentIds = players;
       config = { players, werewolves, seer: seer || undefined };
+    } else {
+      if (fish.length === 0) {
+        setError("至少需要一条鱼");
+        return;
+      }
+      agentIds = fish;
+      config = { fish, ticks };
     }
 
     setSubmitting(true);
@@ -97,10 +108,11 @@ function LaunchWorldTab() {
             <option value="debate">辩论赛</option>
             <option value="discussion">讨论组</option>
             <option value="werewolf">狼人杀</option>
+            <option value="aquarium">水族箱</option>
           </select>
         </label>
 
-        {template !== "werewolf" && (
+        {(template === "debate" || template === "discussion") && (
           <>
             <label>
               {template === "debate" ? "辩题" : "讨论话题"}
@@ -236,6 +248,38 @@ function LaunchWorldTab() {
             </label>
             <p className="muted-cell">
               同一个 Agent 只应出现在一个身份里；上帝视角（时间轴/管理侧）始终能看到所有身份，Agent 之间的信息差只体现在它们各自收到的观测里。
+            </p>
+          </>
+        )}
+
+        {template === "aquarium" && (
+          <>
+            <fieldset>
+              <legend>鱼群（每条鱼是一个 Agent）</legend>
+              {agents.map((a) => (
+                <label key={a.config.agentId} className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={fish.includes(a.config.agentId)}
+                    onChange={() => toggle(fish, setFish, a.config.agentId)}
+                  />
+                  {a.config.agentId} <span className="muted-cell">({a.config.adapter})</span>
+                </label>
+              ))}
+            </fieldset>
+
+            <label>
+              总 tick 数（模拟时长）
+              <input
+                type="number"
+                min={10}
+                max={400}
+                value={ticks}
+                onChange={(e) => setTicks(Number(e.target.value))}
+              />
+            </label>
+            <p className="muted-cell">
+              这是首个 tick-based（连续模拟）世界：鱼每隔几 tick 才重新决策一次游动行为，其余 tick 是确定性物理推进；服务端按固定节奏（150ms/tick）推进，可在展示侧实时观看。
             </p>
           </>
         )}

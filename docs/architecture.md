@@ -97,8 +97,8 @@ interface WorldTemplate {
 }
 ```
 
-- **turn-based**：调度器按顺序等待相关 Agent 响应后再推进（辩论、讨论组、狼人杀、辩论）。
-- **tick-based**：调度器按固定节奏推进，Agent 各自异步响应（鱼缸、人性实验室）。
+- **turn-based**：调度器按顺序等待相关 Agent 响应后再推进（辩论、讨论组、狼人杀）。模板实现 `nextActor`/`buildObservation`/`applyAction`。
+- **tick-based**（已实现，鱼缸验证）：调度器按固定墙钟节奏推进，模板实现 `actorsForTick`（本 tick 哪些 Agent 需要决策，通常大多数 tick 为空）+ `advanceTick`（确定性物理推进 + 产出快照事件）。`RunWorldOptions.tickIntervalMs` 控制 tick 间隔，让 mock 模拟也能被实时观看。人性实验室这类场景未来也归此类。
 
 「做题世界」这类没有空间/角色平等互动概念的场景，更接近工具编排而非「世界模拟」，建议作为一种特殊的、无空间概念的世界模板对待，而不强行套用角色站位等展示逻辑。
 

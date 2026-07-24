@@ -69,6 +69,17 @@ export interface WorldTemplate<TState extends WorldState = WorldState> {
   /** Whose turn is it next, or undefined if the world has nothing left to do. */
   nextActor(state: TState): string | undefined;
 
+  /**
+   * Optional: a batch of agents whose decisions this step are simultaneous
+   * and independent (e.g. every player casting a hidden vote at once). The
+   * scheduler builds all their observations from the same pre-batch history
+   * — so they don't see each other's actions this step — and runs their
+   * act() calls in parallel, which also cuts wall-clock time when the
+   * agents are slow (real API/CLI). Return undefined/empty to fall back to
+   * the sequential single-actor `nextActor` path.
+   */
+  nextActors?(state: TState): string[] | undefined;
+
   buildObservation(agentId: string, state: TState, history: WorldEvent[]): Observation;
 
   applyAction(agentId: string, action: AgentAction, state: TState): ApplyActionResult;

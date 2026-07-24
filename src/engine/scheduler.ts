@@ -47,7 +47,7 @@ async function runTurnBased<TState extends WorldState>(
   state: TState,
   persisted: WorldEvent[],
 ): Promise<void> {
-  const { worldId, template, agents, eventLog, maxSteps = 200 } = options;
+  const { worldId, template, maxSteps = 200 } = options;
   const deliveredInstructions = new Set<string>();
 
   let steps = 0;
@@ -59,42 +59,22 @@ async function runTurnBased<TState extends WorldState>(
     }
     steps += 1;
 
-    const actorId = template.nextActor(state);
-    if (!actorId) {
-      throw new Error(
-        `runWorld: template ${template.id} is not finished but returned no next actor`,
-      );
+    // A template may declare a batch of agents that decide simultaneously
+    // this step (e.g. all voters). Otherwise fall back to the single next
+    // actor.
+    const batch = template.nextActors?.(state)?.filter(Boolean) as string[] | undefined;
+    let actorIds: string[];
+    if (batch && batch.length > 0) {
+      actorIds = batch;
+    } else {
+      const single = template.nextActor(state);
+      if (!single) {
+        throw new Error(`runWorld: template ${template.id} is not finished but returned no next actor`);
+      }
+      actorIds = [single];
     }
 
-    const agent = agents.get(actorId);
-    if (!agent) {
-      throw new Error(`runWorld: no agent adapter registered for actor "${actorId}"`);
-    }
-
-    // Emitted before the (possibly slow, real CLI/API) call so clients can
-    // show "this agent is deciding now" instead of only seeing the result.
-    // visibilityForActor lets games with hidden roles (werewolf) avoid
-    // leaking whose turn it is during a private phase.
-    const turnVisibleTo = template.visibilityForActor?.(actorId, state);
-    persisted.push(
-      eventLog.append(worldId, { type: "turn.started", actorId, payload: {}, visibleTo: turnVisibleTo }),
-    );
-
-    // Every template gets this filtering for free: an event is visible to
-    // this actor unless it was tagged with a visibleTo list that excludes
-    // them. REST/WS never apply this filter, so the human observer always
-    // sees the raw, unredacted history regardless of what agents see.
-    const history = eventLog.history(worldId).filter((e) => !e.visibleTo || e.visibleTo.includes(actorId));
-    const observation = template.buildObservation(actorId, state, history);
-    // Re-read from the log each turn, so a god instruction that arrived
-    // mid-run is surfaced to its target's next Observation.
-    applyPendingInstructions(observation, history, actorId, deliveredInstructions);
-    const action = await agent.act(observation);
-    const { events } = template.applyAction(actorId, action, state);
-
-    for (const event of events) {
-      persisted.push(eventLog.append(worldId, event));
-    }
+    await runStep(actorIds, options, state, persisted, deliveredInstructions, true);
   }
 }
 
@@ -103,7 +83,7 @@ async function runTickBased<TState extends WorldState>(
   state: TState,
   persisted: WorldEvent[],
 ): Promise<void> {
-  const { worldId, template, agents, eventLog, maxSteps = 5000, tickIntervalMs = 0 } = options;
+  const { worldId, template, eventLog, maxSteps = 5000, tickIntervalMs = 0 } = options;
   const deliveredInstructions = new Set<string>();
 
   if (!template.actorsForTick || !template.advanceTick) {
@@ -119,21 +99,12 @@ async function runTickBased<TState extends WorldState>(
     }
     ticks += 1;
 
-    // Gather this tick's decisions. Agents re-decide infrequently, so most
-    // ticks have an empty actor list and are pure physics.
-    for (const actorId of template.actorsForTick(state)) {
-      const agent = agents.get(actorId);
-      if (!agent) {
-        throw new Error(`runWorld: no agent adapter registered for actor "${actorId}"`);
-      }
-      const history = eventLog.history(worldId).filter((e) => !e.visibleTo || e.visibleTo.includes(actorId));
-      const observation = template.buildObservation(actorId, state, history);
-      applyPendingInstructions(observation, history, actorId, deliveredInstructions);
-      const action = await agent.act(observation);
-      const { events } = template.applyAction(actorId, action, state);
-      for (const event of events) {
-        persisted.push(eventLog.append(worldId, event));
-      }
+    // Agents re-decide infrequently, so most ticks have an empty actor list
+    // and are pure physics. When several decide the same tick they run
+    // concurrently.
+    const actorIds = template.actorsForTick(state);
+    if (actorIds.length > 0) {
+      await runStep(actorIds, options, state, persisted, deliveredInstructions, false);
     }
 
     for (const event of template.advanceTick(state)) {
@@ -142,6 +113,61 @@ async function runTickBased<TState extends WorldState>(
 
     if (tickIntervalMs > 0 && !template.isFinished(state)) {
       await sleep(tickIntervalMs);
+    }
+  }
+}
+
+/**
+ * Runs one step for a set of actors: emits their turn.started events (when
+ * `emitTurnStarted`), builds every observation from a single pre-batch
+ * history snapshot so simultaneous actors can't see each other's actions,
+ * runs all act() calls concurrently, then applies the results in order.
+ * State mutation stays serial — only the (slow) act() calls parallelize.
+ */
+async function runStep<TState extends WorldState>(
+  actorIds: string[],
+  options: RunWorldOptions<TState>,
+  state: TState,
+  persisted: WorldEvent[],
+  deliveredInstructions: Set<string>,
+  emitTurnStarted: boolean,
+): Promise<void> {
+  const { worldId, template, agents, eventLog } = options;
+
+  const chosen = actorIds.map((actorId) => {
+    const agent = agents.get(actorId);
+    if (!agent) throw new Error(`runWorld: no agent adapter registered for actor "${actorId}"`);
+    return { actorId, agent };
+  });
+
+  if (emitTurnStarted) {
+    // Emitted before the (possibly slow, real CLI/API) call so clients can
+    // show "this agent is deciding now". visibilityForActor lets games with
+    // hidden roles (werewolf) avoid leaking whose turn it is.
+    for (const { actorId } of chosen) {
+      const turnVisibleTo = template.visibilityForActor?.(actorId, state);
+      persisted.push(eventLog.append(worldId, { type: "turn.started", actorId, payload: {}, visibleTo: turnVisibleTo }));
+    }
+  }
+
+  // One snapshot for the whole batch: filtered per-actor by visibleTo so the
+  // human observer's raw log is never redacted, and (crucially) simultaneous
+  // actors observe the same pre-batch state. Re-reading here also surfaces
+  // any god instruction that arrived mid-run.
+  const fullHistory = eventLog.history(worldId);
+  const observations = chosen.map(({ actorId }) => {
+    const history = fullHistory.filter((e) => !e.visibleTo || e.visibleTo.includes(actorId));
+    const observation = template.buildObservation(actorId, state, history);
+    applyPendingInstructions(observation, history, actorId, deliveredInstructions);
+    return observation;
+  });
+
+  const actions = await Promise.all(chosen.map(({ agent }, i) => agent.act(observations[i])));
+
+  for (let i = 0; i < chosen.length; i++) {
+    const { events } = template.applyAction(chosen[i].actorId, actions[i], state);
+    for (const event of events) {
+      persisted.push(eventLog.append(worldId, event));
     }
   }
 }

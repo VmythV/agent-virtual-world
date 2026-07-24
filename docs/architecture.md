@@ -105,6 +105,7 @@ interface WorldTemplate {
 
 - **turn-based**：调度器按顺序等待相关 Agent 响应后再推进（辩论、讨论组、狼人杀）。模板实现 `nextActor`/`buildObservation`/`applyAction`。
 - **tick-based**（已实现，鱼缸验证）：调度器按固定墙钟节奏推进，模板实现 `actorsForTick`（本 tick 哪些 Agent 需要决策，通常大多数 tick 为空）+ `advanceTick`（确定性物理推进 + 产出快照事件）。`RunWorldOptions.tickIntervalMs` 控制 tick 间隔，让 mock 模拟也能被实时观看。人性实验室这类场景未来也归此类。
+- **多 Agent 并发决策**（已实现）：回合制模板可选实现 `nextActors(state): string[]`，声明「本步这批 Agent 同步、独立决策」（如所有玩家同时投票）。调度器用**同一份「批前历史快照」**给这批 Agent 各自构造观测（因此它们看不到彼此本步的动作——对隐藏投票是正确的），然后 `Promise.all` 并行跑它们的 `act()`，最后按确定顺序串行 `applyAction`（状态变更不并发，只有慢速的 `act()` 调用并行）。tick 制里同 tick 的多个决策也走同一条并行路径。狼人杀的夜晚与投票阶段用它既修掉了「后投票者能看到先投票」的泄露，又在 Agent 慢（真实 API/CLI）时显著降低单步墙钟耗时。`npm run demo:concurrency` 用带延迟的 mock 证明了并发度 ≥ 2 且结果仍正确。
 
 「做题世界」这类没有空间/角色平等互动概念的场景，更接近工具编排而非「世界模拟」（已实现，见 `problemSolvingWorldTemplate.ts`）：由一个「协调者」（即最初设想里的「世界管理者」）反复决定把问题派给哪个专家 Agent（一个 choice 动作：选专家或 FINALIZE），各专家给出贡献，协调者最后汇总出 `world.answer`。它复用同一套 `WorldTemplate` + choice 动作协议，只是 `nextActor` 体现的是「管理者指挥」而非平等轮流；由 `maxConsultations` 兜底保证终止。展示侧仍给了 3D 站位（协调者居中金色、专家一排青色），并未因为它「非空间」就特殊对待——事实证明统一的 Avatar 舞台足够表达这种编排关系。它还天然和上帝指令通道联动：给协调者发一条高层指令，就是「管理者代为指挥执行」。
 

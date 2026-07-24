@@ -134,6 +134,18 @@ export const werewolfWorldTemplate: WorldTemplate<WerewolfState> = {
     return state.turnOrder[state.turnIndex];
   },
 
+  nextActors(state: WerewolfState) {
+    if (state.winner) return undefined;
+    // Night actions and day-vote ballots are simultaneous + hidden: everyone
+    // acts at once without seeing each other's choice this phase. (This also
+    // fixes the sequential-reveal leak where a later voter could see earlier
+    // votes.) Day discussion stays sequential so speakers hear prior points.
+    if (state.phase === "night" || state.phase === "day-vote") {
+      return state.turnOrder.slice(state.turnIndex);
+    }
+    return undefined;
+  },
+
   visibilityForActor(actorId: string, state: WerewolfState) {
     if (state.phase !== "night") return undefined;
     const role = state.roles[actorId];

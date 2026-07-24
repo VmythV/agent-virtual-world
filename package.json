@@ -12,6 +12,7 @@
     "demo:aquarium": "tsx src/demo/runAquarium.ts",
     "demo:god": "tsx src/demo/runGodInstruction.ts",
     "demo:solve": "tsx src/demo/runProblemSolving.ts",
+    "demo:concurrency": "tsx src/demo/runConcurrency.ts",
     "server": "tsx src/server/index.ts",
     "typecheck": "tsc --noEmit"
   },

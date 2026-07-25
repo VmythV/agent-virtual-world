@@ -16,7 +16,8 @@ type Template =
   | "collab-build"
   | "negotiation"
   | "market"
-  | "escape-room";
+  | "escape-room"
+  | "research";
 
 function LaunchWorldTab() {
   const navigate = useNavigate();
@@ -88,6 +89,11 @@ function LaunchWorldTab() {
   const [solution, setSolution] = useState("738");
   const [clues, setClues] = useState<Record<string, string>>({});
   const [solverAgent, setSolverAgent] = useState("");
+
+  // research-only
+  const [question, setQuestion] = useState("某项技术的可行性如何？");
+  const [researchers, setResearchers] = useState<string[]>([]);
+  const [leadAgent, setLeadAgent] = useState("");
 
   const [error, setError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
@@ -232,7 +238,7 @@ function LaunchWorldTab() {
       }
       agentIds = Array.from(new Set([...Object.keys(buyers), ...Object.keys(sellers)]));
       config = { good, buyers, sellers, rounds };
-    } else {
+    } else if (template === "escape-room") {
       const clueMap = Object.fromEntries(
         Object.entries(clues).filter(([id, v]) => v.trim() && id !== solverAgent).map(([id, v]) => [id, v.trim()]),
       );
@@ -242,6 +248,14 @@ function LaunchWorldTab() {
       }
       agentIds = Array.from(new Set([...Object.keys(clueMap), solverAgent]));
       config = { puzzle, solution, clues: clueMap, solver: solverAgent, rounds };
+    } else {
+      const rs = researchers.filter((id) => id !== leadAgent);
+      if (rs.length === 0 || !leadAgent) {
+        setError("至少需要一个研究员和一个汇总者（lead）");
+        return;
+      }
+      agentIds = Array.from(new Set([...rs, leadAgent]));
+      config = { question, researchers: rs, lead: leadAgent, rounds };
     }
 
     setSubmitting(true);
@@ -277,6 +291,7 @@ function LaunchWorldTab() {
             <option value="negotiation">谈判/外交（联盟博弈）</option>
             <option value="market">市场/交易所</option>
             <option value="escape-room">密室逃脱（非对称线索）</option>
+            <option value="research">研究/工具调用</option>
           </select>
         </label>
 
@@ -819,6 +834,44 @@ function LaunchWorldTab() {
             </fieldset>
             <p className="muted-cell">
               合作型非对称信息：每个成员只看到自己的线索（<code>visibleTo</code>），谁都无法独自解开；分享后由解谜者拼出答案。上帝视角可见全部线索。
+            </p>
+          </>
+        )}
+
+        {template === "research" && (
+          <>
+            <label>
+              研究问题
+              <input required value={question} onChange={(e) => setQuestion(e.target.value)} />
+            </label>
+            <label>
+              研究轮次
+              <input type="number" min={1} max={5} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} />
+            </label>
+            <label>
+              汇总者 lead
+              <select value={leadAgent} onChange={(e) => setLeadAgent(e.target.value)}>
+                <option value="">选择一个 Agent</option>
+                {agents.map((a) => (
+                  <option key={a.config.agentId} value={a.config.agentId}>{a.config.agentId}</option>
+                ))}
+              </select>
+            </label>
+            <fieldset>
+              <legend>研究员（建议用开启「允许工具」的 claude-code 适配器才能真正查证）</legend>
+              {agents.map((a) => (
+                <label key={a.config.agentId} className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={researchers.includes(a.config.agentId)}
+                    onChange={() => toggle(researchers, setResearchers, a.config.agentId)}
+                  />
+                  {a.config.agentId} <span className="muted-cell">({a.config.adapter})</span>
+                </label>
+              ))}
+            </fieldset>
+            <p className="muted-cell">
+              首个需要「真实外部 I/O」的场景：研究员应使用开启工具的 CLI Agent（在 Agent 管理里给 claude-code 预设勾选「允许工具」），去真正搜索/读写/执行查证问题，lead 最后汇总。
             </p>
           </>
         )}

@@ -13,6 +13,7 @@ interface FormState {
   responsesText: string;
   cliPreset: CliPreset;
   maxBudgetUsd: string;
+  allowTools: boolean;
   customCommand: string;
   customArgsText: string;
 }
@@ -25,6 +26,7 @@ const EMPTY_FORM: FormState = {
   responsesText: "",
   cliPreset: "claude-code",
   maxBudgetUsd: "0.05",
+  allowTools: false,
   customCommand: "",
   customArgsText: "",
 };
@@ -219,6 +221,14 @@ function AgentsTab() {
                       onChange={(e) => setForm({ ...form, maxBudgetUsd: e.target.value })}
                     />
                   </label>
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={form.allowTools}
+                      onChange={(e) => setForm({ ...form, allowTools: e.target.checked })}
+                    />
+                    允许工具（搜索/读写/执行）—— 研究类世界需要；默认关闭（最小权限）
+                  </label>
                 </>
               ) : (
                 <>
@@ -283,6 +293,7 @@ function configToForm(config: AgentConfig): FormState {
       systemPrompt: config.cli.systemPrompt ?? "",
       model: config.cli.model ?? "",
       maxBudgetUsd: config.cli.maxBudgetUsd !== undefined ? String(config.cli.maxBudgetUsd) : "",
+      allowTools: config.cli.allowTools ?? false,
     };
   }
   return {
@@ -315,6 +326,7 @@ function formToConfig(form: FormState): AgentConfig {
         systemPrompt: form.systemPrompt || undefined,
         model: form.model || undefined,
         maxBudgetUsd: form.maxBudgetUsd ? Number(form.maxBudgetUsd) : undefined,
+        allowTools: form.allowTools || undefined,
       },
     };
   }

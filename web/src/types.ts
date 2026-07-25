@@ -41,7 +41,7 @@ export interface AgentVisualState {
 
 /** Mirrors src/core/agentConfig.ts. */
 export type CliInvocationConfig =
-  | { preset: "claude-code"; systemPrompt?: string; model?: string; maxBudgetUsd?: number; extraArgs?: string[] }
+  | { preset: "claude-code"; systemPrompt?: string; model?: string; maxBudgetUsd?: number; allowTools?: boolean; extraArgs?: string[] }
   | { preset: "custom"; command: string; args?: string[] };
 
 export type AgentConfig =

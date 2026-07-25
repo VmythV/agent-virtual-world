@@ -30,7 +30,9 @@ export type StageRole =
   | "buyer"
   | "seller"
   | "member"
-  | "solver";
+  | "solver"
+  | "researcher"
+  | "lead";
 
 export interface AgentPlacement {
   agentId: string;
@@ -218,6 +220,22 @@ export function resolveEscapeLayout(worldCreatedPayload: Record<string, unknown>
   return placements;
 }
 
+/** Research: the lead upstage center, researchers in a front row. */
+export function resolveResearchLayout(worldCreatedPayload: Record<string, unknown> | undefined): AgentPlacement[] {
+  if (!worldCreatedPayload) return [];
+  const researchers = (worldCreatedPayload.researchers as string[] | undefined) ?? [];
+  const lead = worldCreatedPayload.lead as string | undefined;
+  const placements: AgentPlacement[] = [];
+  researchers.forEach((agentId, i) => {
+    const spread = researchers.length > 1 ? i / (researchers.length - 1) - 0.5 : 0;
+    placements.push({ agentId, role: "researcher", position: [spread * 5, 0, -0.5] });
+  });
+  if (lead && !researchers.includes(lead)) {
+    placements.push({ agentId: lead, role: "lead", position: [0, 0, -4.4] });
+  }
+  return placements;
+}
+
 /** Dispatches to the right layout by which keys are present — no template name needed. */
 export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   const created = history.find((e) => e.type === "world.created");
@@ -234,6 +252,7 @@ export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   // negotiation also has "players", so check its distinctive "prize" first.
   if ("prize" in created.payload) return resolveNegotiationLayout(created.payload);
   if ("puzzle" in created.payload) return resolveEscapeLayout(created.payload);
+  if ("researchers" in created.payload) return resolveResearchLayout(created.payload);
   if ("players" in created.payload) {
     const rolesEvent = history.find((e) => e.type === "roles.assigned");
     return resolveWerewolfLayout(created.payload, rolesEvent?.payload);

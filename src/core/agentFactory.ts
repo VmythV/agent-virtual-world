@@ -39,7 +39,11 @@ export function resolveCliInvocation(cli: CliInvocationConfig): { command: strin
     return { command: cli.command, args: cli.args ?? [] };
   }
 
-  const args = ["-p", "--output-format", "text", "--no-session-persistence", "--tools", ""];
+  const args = ["-p", "--output-format", "text", "--no-session-persistence"];
+  // Least privilege by default (--tools ""); enable the built-in toolset for
+  // worlds that need real external I/O (research). Callers can still narrow
+  // it further via extraArgs.
+  args.push("--tools", cli.allowTools ? "default" : "");
   if (cli.model) args.push("--model", cli.model);
   if (cli.systemPrompt) args.push("--system-prompt", cli.systemPrompt);
   if (cli.maxBudgetUsd !== undefined) args.push("--max-budget-usd", String(cli.maxBudgetUsd));

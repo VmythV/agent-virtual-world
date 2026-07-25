@@ -38,6 +38,8 @@ const ROLE_COLOR: Record<StageRole, string> = {
   seller: "#ef4444",
   member: "#818cf8",
   solver: "#f59e0b",
+  researcher: "#2dd4bf",
+  lead: "#f59e0b",
 };
 
 const DEAD_COLOR = "#4b5563";

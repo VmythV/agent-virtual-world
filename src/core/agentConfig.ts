@@ -34,6 +34,14 @@ export type CliInvocationConfig =
       systemPrompt?: string;
       model?: string;
       maxBudgetUsd?: number;
+      /**
+       * Enable the agent's built-in tools (search, read, run, ...). Default
+       * (false) passes `--tools ""` for least privilege — good for pure
+       * text-generation worlds. Enable for worlds where the agent must do
+       * real external I/O (e.g. research). When on, the CLI is trusted to
+       * act, so use only with appropriate sandboxing/permissions.
+       */
+      allowTools?: boolean;
       extraArgs?: string[];
     }
   | {

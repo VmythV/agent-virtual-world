@@ -97,6 +97,7 @@ const PHASE_LABELS: Record<string, string> = {
   vote: "🗳️ 投票",
   investigate: "🔍 收集线索",
   solve: "🔓 解谜",
+  synthesis: "🧩 汇总结论",
 };
 
 export function formatRoundLabel(event: WorldEvent): string {

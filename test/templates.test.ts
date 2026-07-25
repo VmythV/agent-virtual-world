@@ -131,6 +131,24 @@ describe("human-lab template — private personas", () => {
   });
 });
 
+describe("research template", () => {
+  it("researchers report findings over rounds, lead synthesizes", async () => {
+    const events = await run(
+      "research",
+      { question: "Q", researchers: ["r1", "r2"], lead: "lead", rounds: 2 },
+      new Map<string, AgentAdapter>([
+        ["r1", mock("r1", ["finding-1a", "finding-1b"])],
+        ["r2", mock("r2", ["finding-2a", "finding-2b"])],
+        ["lead", mock("lead", ["synthesis"])],
+      ]),
+    );
+    expect(events.filter((e) => e.type === "research.finding")).toHaveLength(4); // 2 researchers x 2 rounds
+    const answer = events.find((e) => e.type === "research.answer");
+    expect(answer?.actorId).toBe("lead");
+    expect(answer?.payload.text).toBe("synthesis");
+  });
+});
+
 describe("escape-room template — asymmetric clues", () => {
   it("members keep clues private, solver escapes with the combined answer", async () => {
     const alice = new MockAgentAdapter({ agentId: "alice", responses: ["first is 7"] });

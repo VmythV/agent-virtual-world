@@ -118,6 +118,18 @@ cd web && npm install && npm run dev   # http://localhost:5173
 - 想让 Agent 用真实大模型：创建 `api` 适配器并设置 `ANTHROPIC_API_KEY` 环境变量；或用 `cli` 适配器的 `claude-code` 预设直接拉起本机 `claude` CLI。
 - 世界运行时，头部的「回放」按钮可拖拽回看；运行中还会出现「上帝指令」输入条。
 
+## 部署
+
+后端会自己托管构建后的前端，因此生产环境是单容器/单进程（API + WebSocket + 前端同一个端口）。
+
+```bash
+docker build -t agent-virtual-world .
+docker run -p 4000:4000 -v "$PWD/data:/app/data" agent-virtual-world
+# 打开 http://localhost:4000
+```
+
+不用 Docker：先 `cd web && npm run build`，再在仓库根目录 `npm run server`——检测到 `web/dist` 存在就自动托管。配置走环境变量（见 [`.env.example`](.env.example)）：`PORT`、`DB_PATH`、`ANTHROPIC_API_KEY`，以及 CLI Agent 池的限额。`data/` 卷保存 SQLite 数据库（Agent、世界、事件日志）。
+
 ## 项目结构
 
 ```

@@ -118,6 +118,18 @@ cd web && npm install && npm run dev   # http://localhost:5173
 - To have agents use a real LLM: create an `api` adapter and set the `ANTHROPIC_API_KEY` env var; or use the `cli` adapter's `claude-code` preset to spawn your local `claude` CLI directly.
 - While a world runs, the header's **Replay** button lets you scrub back; a **God-instruction** bar also appears during a run.
 
+## Deploy
+
+The backend serves the built SPA itself, so production is a single container/process (API + WebSocket + frontend on one port).
+
+```bash
+docker build -t agent-virtual-world .
+docker run -p 4000:4000 -v "$PWD/data:/app/data" agent-virtual-world
+# open http://localhost:4000
+```
+
+Without Docker: `cd web && npm run build`, then from the repo root `npm run server` — it auto-serves `web/dist` when present. Configuration is via env vars (see [`.env.example`](.env.example)): `PORT`, `DB_PATH`, `ANTHROPIC_API_KEY`, and the CLI-agent pool limits. The `data/` volume holds the SQLite database (agents, worlds, event log).
+
 ## Project layout
 
 ```

@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { openDatabase } from "../core/db.js";
 import { EventLog } from "../core/eventLog.js";
 import { AgentStore } from "../core/agentStore.js";
@@ -7,6 +9,16 @@ import { buildServer } from "./app.js";
 
 const PORT = Number(process.env.PORT ?? 4000);
 const DB_PATH = process.env.DB_PATH ?? "data/events.db";
+
+/**
+ * Serve the built SPA from the same server when it exists (single-container
+ * deploy). Defaults to web/dist; override with STATIC_DIR. In dev this dir
+ * is absent, so Vite keeps serving the frontend on :5173 and this is skipped.
+ */
+function resolveStaticDir(): string | undefined {
+  const dir = resolve(process.env.STATIC_DIR ?? "web/dist");
+  return existsSync(dir) ? dir : undefined;
+}
 
 async function main() {
   const db = openDatabase(DB_PATH);
@@ -31,7 +43,7 @@ async function main() {
     windowMs: 60 * 60 * 1000,
   });
 
-  const app = await buildServer({ eventLog, agentStore, worldStore, cliPool });
+  const app = await buildServer({ eventLog, agentStore, worldStore, cliPool, staticDir: resolveStaticDir() });
 
   await app.listen({ port: PORT, host: "0.0.0.0" });
 

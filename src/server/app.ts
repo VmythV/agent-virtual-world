@@ -1,7 +1,9 @@
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import cors from "@fastify/cors";
 import websocketPlugin from "@fastify/websocket";
+import fastifyStatic from "@fastify/static";
 import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 import type { EventLog } from "../core/eventLog.js";
 import { AgentStore, AgentValidationError } from "../core/agentStore.js";
 import { WorldStore } from "../core/worldStore.js";
@@ -17,10 +19,12 @@ export interface AppDeps {
   agentStore: AgentStore;
   worldStore: WorldStore;
   cliPool: RuntimePool;
+  /** When set, serve the built frontend (web/dist) from here with an SPA fallback. */
+  staticDir?: string;
 }
 
 export async function buildServer(deps: AppDeps): Promise<FastifyInstance> {
-  const { eventLog, agentStore, worldStore, cliPool } = deps;
+  const { eventLog, agentStore, worldStore, cliPool, staticDir } = deps;
   const app = Fastify({ logger: true });
 
   // Abort controllers for worlds currently running in memory, so they can be
@@ -195,6 +199,21 @@ export async function buildServer(deps: AppDeps): Promise<FastifyInstance> {
       eventLog.off("appended", onAppended);
     });
   });
+
+  // --- Static frontend (single-container deploy) ---------------------------
+  // Registered last so it never shadows the API/WS routes above. Serves the
+  // built SPA and falls back to index.html for client-side routes (/world/…,
+  // /admin/…) while leaving unknown /api/* paths as real 404s.
+  if (staticDir) {
+    await app.register(fastifyStatic, { root: staticDir, wildcard: false });
+    app.setNotFoundHandler((req, reply) => {
+      if (req.raw.url && (req.raw.url.startsWith("/api/") || req.raw.url.startsWith("/ws/"))) {
+        return reply.code(404).send({ error: "not found" });
+      }
+      return reply.sendFile("index.html", staticDir);
+    });
+    app.log.info(`Serving built frontend from ${join(staticDir)}`);
+  }
 
   return app;
 }

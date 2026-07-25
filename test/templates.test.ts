@@ -131,6 +131,47 @@ describe("human-lab template — private personas", () => {
   });
 });
 
+describe("escape-room template — asymmetric clues", () => {
+  it("members keep clues private, solver escapes with the combined answer", async () => {
+    const alice = new MockAgentAdapter({ agentId: "alice", responses: ["first is 7"] });
+    const events = await run(
+      "escape-room",
+      {
+        puzzle: "3-digit lock",
+        solution: "738",
+        clues: { alice: "digit 1 is 7", bob: "digit 2 is 3", carol: "digit 3 is 8" },
+        solver: "solver",
+        rounds: 1,
+      },
+      new Map<string, AgentAdapter>([
+        ["alice", alice],
+        ["bob", mock("bob", ["second is 3"])],
+        ["carol", mock("carol", ["third is 8"])],
+        ["solver", mock("solver", ["the code is 738"])],
+      ]),
+    );
+    expect(events.filter((e) => e.type === "clue.shared")).toHaveLength(3);
+    expect(events.find((e) => e.type === "escape.result")!.payload.success).toBe(true);
+    // alice never saw another member's private clue.
+    expect(
+      alice.lastObservation!.history.some((e: WorldEvent) => e.type === "clue.assigned" && e.actorId !== "alice"),
+    ).toBe(false);
+  });
+
+  it("fails the escape when the solver's answer is wrong", async () => {
+    const events = await run(
+      "escape-room",
+      { puzzle: "P", solution: "738", clues: { a: "x", b: "y" }, solver: "s", rounds: 1 },
+      new Map<string, AgentAdapter>([
+        ["a", mock("a", ["x"])],
+        ["b", mock("b", ["y"])],
+        ["s", mock("s", ["maybe 111?"])],
+      ]),
+    );
+    expect(events.find((e) => e.type === "escape.result")!.payload.success).toBe(false);
+  });
+});
+
 describe("market template — double auction, conservation", () => {
   it("clears trades and conserves cash + goods across the market", async () => {
     const events = await run(

@@ -28,7 +28,9 @@ export type StageRole =
   | "builder"
   | "player"
   | "buyer"
-  | "seller";
+  | "seller"
+  | "member"
+  | "solver";
 
 export interface AgentPlacement {
   agentId: string;
@@ -198,6 +200,24 @@ export function resolveMarketLayout(worldCreatedPayload: Record<string, unknown>
   return placements;
 }
 
+/** Escape room: members fan out in a semicircle, the solver upstage center. */
+export function resolveEscapeLayout(worldCreatedPayload: Record<string, unknown> | undefined): AgentPlacement[] {
+  if (!worldCreatedPayload) return [];
+  const members = (worldCreatedPayload.members as string[] | undefined) ?? [];
+  const solver = worldCreatedPayload.solver as string | undefined;
+  const placements: AgentPlacement[] = [];
+  const radius = 3.2;
+  members.forEach((agentId, i) => {
+    const spread = members.length > 1 ? i / (members.length - 1) - 0.5 : 0;
+    const angle = spread * Math.PI * 0.8;
+    placements.push({ agentId, role: "member", position: [Math.sin(angle) * radius, 0, -1.5 - Math.cos(angle) * radius * 0.5] });
+  });
+  if (solver && !members.includes(solver)) {
+    placements.push({ agentId: solver, role: "solver", position: [0, 0, -4.6] });
+  }
+  return placements;
+}
+
 /** Dispatches to the right layout by which keys are present — no template name needed. */
 export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   const created = history.find((e) => e.type === "world.created");
@@ -213,6 +233,7 @@ export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   if ("builders" in created.payload && "task" in created.payload) return resolveCollabLayout(created.payload);
   // negotiation also has "players", so check its distinctive "prize" first.
   if ("prize" in created.payload) return resolveNegotiationLayout(created.payload);
+  if ("puzzle" in created.payload) return resolveEscapeLayout(created.payload);
   if ("players" in created.payload) {
     const rolesEvent = history.find((e) => e.type === "roles.assigned");
     return resolveWerewolfLayout(created.payload, rolesEvent?.payload);

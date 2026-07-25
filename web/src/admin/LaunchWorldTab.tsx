@@ -15,7 +15,8 @@ type Template =
   | "courtroom"
   | "collab-build"
   | "negotiation"
-  | "market";
+  | "market"
+  | "escape-room";
 
 function LaunchWorldTab() {
   const navigate = useNavigate();
@@ -81,6 +82,12 @@ function LaunchWorldTab() {
   const [good, setGood] = useState("小麦");
   const [buyerRows, setBuyerRows] = useState<Record<string, { cash: string; value: string }>>({});
   const [sellerRows, setSellerRows] = useState<Record<string, { units: string; cost: string }>>({});
+
+  // escape-room-only
+  const [puzzle, setPuzzle] = useState("打开三位数密码锁逃出房间");
+  const [solution, setSolution] = useState("738");
+  const [clues, setClues] = useState<Record<string, string>>({});
+  const [solverAgent, setSolverAgent] = useState("");
 
   const [error, setError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
@@ -208,7 +215,7 @@ function LaunchWorldTab() {
       }
       agentIds = negPlayers;
       config = { prize, players: negPlayers, rounds };
-    } else {
+    } else if (template === "market") {
       const buyers = Object.fromEntries(
         Object.entries(buyerRows)
           .filter(([id, r]) => !sellerRows[id]?.units && Number(r.cash) > 0 && Number(r.value) > 0)
@@ -225,6 +232,16 @@ function LaunchWorldTab() {
       }
       agentIds = Array.from(new Set([...Object.keys(buyers), ...Object.keys(sellers)]));
       config = { good, buyers, sellers, rounds };
+    } else {
+      const clueMap = Object.fromEntries(
+        Object.entries(clues).filter(([id, v]) => v.trim() && id !== solverAgent).map(([id, v]) => [id, v.trim()]),
+      );
+      if (Object.keys(clueMap).length < 2 || !solverAgent || !solution.trim()) {
+        setError("至少需要两名持线索的成员、一个解谜者和一个答案");
+        return;
+      }
+      agentIds = Array.from(new Set([...Object.keys(clueMap), solverAgent]));
+      config = { puzzle, solution, clues: clueMap, solver: solverAgent, rounds };
     }
 
     setSubmitting(true);
@@ -259,6 +276,7 @@ function LaunchWorldTab() {
             <option value="collab-build">协作编码（共享工作区）</option>
             <option value="negotiation">谈判/外交（联盟博弈）</option>
             <option value="market">市场/交易所</option>
+            <option value="escape-room">密室逃脱（非对称线索）</option>
           </select>
         </label>
 
@@ -757,6 +775,50 @@ function LaunchWorldTab() {
             </fieldset>
             <p className="muted-cell">
               双向拍卖：每轮买家出价、卖家要价（数值动作，私密），撮合高买对低卖、按中间价成交，现金与货物在各自持久余额间转移，多轮后价格收敛。每人只知自己的估值/成本。
+            </p>
+          </>
+        )}
+
+        {template === "escape-room" && (
+          <>
+            <label>
+              谜题
+              <input required value={puzzle} onChange={(e) => setPuzzle(e.target.value)} />
+            </label>
+            <label>
+              正确答案（solver 的回答需包含它）
+              <input required value={solution} onChange={(e) => setSolution(e.target.value)} />
+            </label>
+            <label>
+              分享轮数
+              <input type="number" min={1} max={5} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} />
+            </label>
+            <label>
+              解谜者
+              <select value={solverAgent} onChange={(e) => setSolverAgent(e.target.value)}>
+                <option value="">选择一个 Agent</option>
+                {agents.map((a) => (
+                  <option key={a.config.agentId} value={a.config.agentId}>{a.config.agentId}</option>
+                ))}
+              </select>
+            </label>
+            <fieldset>
+              <legend>成员与其（私密）线索</legend>
+              {agents
+                .filter((a) => a.config.agentId !== solverAgent)
+                .map((a) => (
+                  <div key={a.config.agentId} className="persona-row">
+                    <span style={{ minWidth: 90 }}>{a.config.agentId}</span>
+                    <input
+                      value={clues[a.config.agentId] ?? ""}
+                      onChange={(e) => setClues({ ...clues, [a.config.agentId]: e.target.value })}
+                      placeholder="该成员私密掌握的线索（留空则不参与）"
+                    />
+                  </div>
+                ))}
+            </fieldset>
+            <p className="muted-cell">
+              合作型非对称信息：每个成员只看到自己的线索（<code>visibleTo</code>），谁都无法独自解开；分享后由解谜者拼出答案。上帝视角可见全部线索。
             </p>
           </>
         )}

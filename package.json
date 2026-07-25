@@ -18,6 +18,7 @@
     "demo:ecosystem": "tsx src/demo/runEcosystem.ts",
     "demo:courtroom": "tsx src/demo/runCourtroom.ts",
     "demo:collab": "tsx src/demo/runCollabBuild.ts",
+    "demo:negotiation": "tsx src/demo/runNegotiation.ts",
     "server": "tsx src/server/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

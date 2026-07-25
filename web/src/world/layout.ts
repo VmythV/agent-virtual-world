@@ -25,7 +25,8 @@ export type StageRole =
   | "prosecution"
   | "defense"
   | "witness"
-  | "builder";
+  | "builder"
+  | "player";
 
 export interface AgentPlacement {
   agentId: string;
@@ -173,6 +174,17 @@ export function resolveCollabLayout(worldCreatedPayload: Record<string, unknown>
   });
 }
 
+/** Negotiation: players stand in a ring (no sides — alliances are hidden). */
+export function resolveNegotiationLayout(worldCreatedPayload: Record<string, unknown> | undefined): AgentPlacement[] {
+  if (!worldCreatedPayload) return [];
+  const players = (worldCreatedPayload.players as string[] | undefined) ?? [];
+  const radius = 3.4;
+  return players.map((agentId, i) => {
+    const angle = (i / players.length) * Math.PI * 2;
+    return { agentId, role: "player" as const, position: [Math.sin(angle) * radius, 0, -2 - Math.cos(angle) * radius * 0.5] };
+  });
+}
+
 /** Dispatches to the right layout by which keys are present — no template name needed. */
 export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   const created = history.find((e) => e.type === "world.created");
@@ -185,6 +197,8 @@ export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   if ("bidders" in created.payload) return resolveAuctionLayout(created.payload);
   if ("prosecutor" in created.payload) return resolveCourtroomLayout(created.payload);
   if ("builders" in created.payload && "task" in created.payload) return resolveCollabLayout(created.payload);
+  // negotiation also has "players", so check its distinctive "prize" first.
+  if ("prize" in created.payload) return resolveNegotiationLayout(created.payload);
   if ("players" in created.payload) {
     const rolesEvent = history.find((e) => e.type === "roles.assigned");
     return resolveWerewolfLayout(created.payload, rolesEvent?.payload);

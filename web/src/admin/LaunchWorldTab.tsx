@@ -13,7 +13,8 @@ type Template =
   | "auction"
   | "ecosystem"
   | "courtroom"
-  | "collab-build";
+  | "collab-build"
+  | "negotiation";
 
 function LaunchWorldTab() {
   const navigate = useNavigate();
@@ -70,6 +71,10 @@ function LaunchWorldTab() {
   // collab-build-only
   const [task, setTask] = useState("共同写出一个项目进度文档 progress.md");
   const [builders, setBuilders] = useState<string[]>([]);
+
+  // negotiation-only
+  const [prize, setPrize] = useState("100 金币");
+  const [negPlayers, setNegPlayers] = useState<string[]>([]);
 
   const [error, setError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
@@ -183,13 +188,20 @@ function LaunchWorldTab() {
       );
       agentIds = Array.from(new Set([prosecutor, defenseCounsel, judgeAgent, ...Object.keys(witnesses)]));
       config = { caseTitle, prosecutor, defense: defenseCounsel, judge: judgeAgent, witnesses, rounds };
-    } else {
+    } else if (template === "collab-build") {
       if (builders.length === 0) {
         setError("至少需要一个 builder（建议用 CLI 适配器的 Agent 才能真正写文件）");
         return;
       }
       agentIds = builders;
       config = { task, builders, rounds };
+    } else {
+      if (negPlayers.length < 3) {
+        setError("谈判至少需要 3 个玩家才有联盟博弈");
+        return;
+      }
+      agentIds = negPlayers;
+      config = { prize, players: negPlayers, rounds };
     }
 
     setSubmitting(true);
@@ -222,6 +234,7 @@ function LaunchWorldTab() {
             <option value="ecosystem">生态（捕食-猎物）</option>
             <option value="courtroom">法庭</option>
             <option value="collab-build">协作编码（共享工作区）</option>
+            <option value="negotiation">谈判/外交（联盟博弈）</option>
           </select>
         </label>
 
@@ -635,6 +648,35 @@ function LaunchWorldTab() {
             </fieldset>
             <p className="muted-cell">
               首个需要「跨回合共享持久工作区」的场景：模板建一个 git 工作区，每个 builder 的 CLI 进程都在同一目录里干活（而非各自沙箱），每步提交并把 diff 显示在时间轴。要真正写代码，请给 builder 用 <code>cli</code> 适配器（claude-code 预设或 custom 命令）。
+            </p>
+          </>
+        )}
+
+        {template === "negotiation" && (
+          <>
+            <label>
+              奖品（争夺的目标）
+              <input required value={prize} onChange={(e) => setPrize(e.target.value)} />
+            </label>
+            <label>
+              结盟轮次
+              <input type="number" min={1} max={5} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} />
+            </label>
+            <fieldset>
+              <legend>玩家（≥3 才有联盟博弈）</legend>
+              {agents.map((a) => (
+                <label key={a.config.agentId} className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={negPlayers.includes(a.config.agentId)}
+                    onChange={() => toggle(negPlayers, setNegPlayers, a.config.agentId)}
+                  />
+                  {a.config.agentId} <span className="muted-cell">({a.config.adapter})</span>
+                </label>
+              ))}
+            </fieldset>
+            <p className="muted-cell">
+              每轮玩家同时私密选一个结盟对象（<code>pact.offer</code> 只对该二人可见），互选即成盟；最后投票争夺奖品，联盟往往抱团。上帝视角可见全部私密提议与联盟图。
             </p>
           </>
         )}

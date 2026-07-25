@@ -131,6 +131,29 @@ describe("human-lab template — private personas", () => {
   });
 });
 
+describe("negotiation template — private pacts + coalition vote", () => {
+  it("forms a pact only on mutual picks, keeps offers private, coalition candidate wins", async () => {
+    const carol = new MockAgentAdapter({ agentId: "carol", responses: ["alice", "alice", "carol"] });
+    const events = await run(
+      "negotiation",
+      { prize: "P", players: ["alice", "bob", "carol"], rounds: 2 },
+      new Map<string, AgentAdapter>([
+        ["alice", mock("alice", ["bob", "bob", "alice"])],
+        ["bob", mock("bob", ["alice", "alice", "alice"])],
+        ["carol", carol],
+      ]),
+    );
+    const pacts = events.filter((e) => e.type === "pact.formed");
+    expect(pacts).toHaveLength(1);
+    expect((pacts[0].payload.between as string[]).slice().sort()).toEqual(["alice", "bob"]);
+    expect(events.find((e) => e.type === "world.verdict")!.payload.winner).toBe("alice");
+    // carol never saw alice's private offer to bob.
+    expect(
+      carol.lastObservation!.history.some((e: WorldEvent) => e.type === "pact.offer" && e.actorId === "alice"),
+    ).toBe(false);
+  });
+});
+
 describe("courtroom template", () => {
   it("witnesses testify (privately-known facts), then arguments, then a verdict", async () => {
     const w1 = new MockAgentAdapter({ agentId: "w1", responses: ["testimony-1"] });

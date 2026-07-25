@@ -93,6 +93,8 @@ const PHASE_LABELS: Record<string, string> = {
   testimony: "⚖️ 证人作证",
   argument: "⚖️ 控辩辩论",
   verdict: "⚖️ 宣判",
+  alliance: "🤝 结盟",
+  vote: "🗳️ 投票",
 };
 
 export function formatRoundLabel(event: WorldEvent): string {

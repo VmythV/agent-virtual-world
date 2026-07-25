@@ -10,6 +10,7 @@ import { ecosystemWorldTemplate } from "./ecosystemWorldTemplate.js";
 import { courtroomWorldTemplate } from "./courtroomWorldTemplate.js";
 import { collabBuildWorldTemplate } from "./collabBuildWorldTemplate.js";
 import { negotiationWorldTemplate } from "./negotiationWorldTemplate.js";
+import { marketWorldTemplate } from "./marketWorldTemplate.js";
 
 export const worldTemplates: Record<string, WorldTemplate<WorldState>> = {
   debate: debateWorldTemplate as unknown as WorldTemplate<WorldState>,
@@ -23,6 +24,7 @@ export const worldTemplates: Record<string, WorldTemplate<WorldState>> = {
   courtroom: courtroomWorldTemplate as unknown as WorldTemplate<WorldState>,
   "collab-build": collabBuildWorldTemplate as unknown as WorldTemplate<WorldState>,
   negotiation: negotiationWorldTemplate as unknown as WorldTemplate<WorldState>,
+  market: marketWorldTemplate as unknown as WorldTemplate<WorldState>,
 };
 
 export function getWorldTemplate(id: string): WorldTemplate<WorldState> | undefined {

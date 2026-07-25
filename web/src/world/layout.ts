@@ -26,7 +26,9 @@ export type StageRole =
   | "defense"
   | "witness"
   | "builder"
-  | "player";
+  | "player"
+  | "buyer"
+  | "seller";
 
 export interface AgentPlacement {
   agentId: string;
@@ -185,6 +187,17 @@ export function resolveNegotiationLayout(worldCreatedPayload: Record<string, unk
   });
 }
 
+/** Market: buyers on the left, sellers on the right (a trading floor). */
+export function resolveMarketLayout(worldCreatedPayload: Record<string, unknown> | undefined): AgentPlacement[] {
+  if (!worldCreatedPayload) return [];
+  const buyers = (worldCreatedPayload.buyers as string[] | undefined) ?? [];
+  const sellers = (worldCreatedPayload.sellers as string[] | undefined) ?? [];
+  const placements: AgentPlacement[] = [];
+  buyers.forEach((agentId, i) => placements.push({ agentId, role: "buyer", position: [-2.8, 0, -1 - i * 1.6] }));
+  sellers.forEach((agentId, i) => placements.push({ agentId, role: "seller", position: [2.8, 0, -1 - i * 1.6] }));
+  return placements;
+}
+
 /** Dispatches to the right layout by which keys are present — no template name needed. */
 export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   const created = history.find((e) => e.type === "world.created");
@@ -195,6 +208,7 @@ export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   if ("participants" in created.payload) return resolveDiscussionLayout(created.payload);
   if ("experts" in created.payload) return resolveProblemLayout(created.payload);
   if ("bidders" in created.payload) return resolveAuctionLayout(created.payload);
+  if ("buyers" in created.payload) return resolveMarketLayout(created.payload);
   if ("prosecutor" in created.payload) return resolveCourtroomLayout(created.payload);
   if ("builders" in created.payload && "task" in created.payload) return resolveCollabLayout(created.payload);
   // negotiation also has "players", so check its distinctive "prize" first.

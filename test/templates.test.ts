@@ -131,6 +131,35 @@ describe("human-lab template — private personas", () => {
   });
 });
 
+describe("market template — double auction, conservation", () => {
+  it("clears trades and conserves cash + goods across the market", async () => {
+    const events = await run(
+      "market",
+      {
+        good: "g",
+        buyers: { bh: { cash: 300, value: 100 }, bl: { cash: 300, value: 80 } },
+        sellers: { sl: { units: 3, cost: 40 }, sh: { units: 3, cost: 60 } },
+        rounds: 3,
+      },
+      new Map<string, AgentAdapter>([
+        ["bh", mock("bh", ["90", "85", "80"])],
+        ["bl", mock("bl", ["70", "72", "74"])],
+        ["sl", mock("sl", ["50", "55", "58"])],
+        ["sh", mock("sh", ["75", "72", "70"])],
+      ]),
+    );
+    expect(events.filter((e) => e.type === "trade.executed").length).toBeGreaterThanOrEqual(1);
+
+    const lastTick = [...events].reverse().find((e) => e.type === "market.tick")!;
+    const bal = lastTick.payload.traders as Array<{ cash: number; holdings: number }>;
+    expect(bal.reduce((s, b) => s + b.cash, 0)).toBeCloseTo(600, 3); // cash conserved
+    expect(bal.reduce((s, b) => s + b.holdings, 0)).toBe(6); // units conserved
+
+    const finished = events.find((e) => e.type === "world.finished");
+    expect(Array.isArray((finished!.payload as { wealth: unknown }).wealth)).toBe(true);
+  });
+});
+
 describe("negotiation template — private pacts + coalition vote", () => {
   it("forms a pact only on mutual picks, keeps offers private, coalition candidate wins", async () => {
     const carol = new MockAgentAdapter({ agentId: "carol", responses: ["alice", "alice", "carol"] });

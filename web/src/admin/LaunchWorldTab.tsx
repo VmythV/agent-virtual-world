@@ -14,7 +14,8 @@ type Template =
   | "ecosystem"
   | "courtroom"
   | "collab-build"
-  | "negotiation";
+  | "negotiation"
+  | "market";
 
 function LaunchWorldTab() {
   const navigate = useNavigate();
@@ -75,6 +76,11 @@ function LaunchWorldTab() {
   // negotiation-only
   const [prize, setPrize] = useState("100 金币");
   const [negPlayers, setNegPlayers] = useState<string[]>([]);
+
+  // market-only: each agent can be a buyer (cash/value) or seller (units/cost)
+  const [good, setGood] = useState("小麦");
+  const [buyerRows, setBuyerRows] = useState<Record<string, { cash: string; value: string }>>({});
+  const [sellerRows, setSellerRows] = useState<Record<string, { units: string; cost: string }>>({});
 
   const [error, setError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
@@ -195,13 +201,30 @@ function LaunchWorldTab() {
       }
       agentIds = builders;
       config = { task, builders, rounds };
-    } else {
+    } else if (template === "negotiation") {
       if (negPlayers.length < 3) {
         setError("谈判至少需要 3 个玩家才有联盟博弈");
         return;
       }
       agentIds = negPlayers;
       config = { prize, players: negPlayers, rounds };
+    } else {
+      const buyers = Object.fromEntries(
+        Object.entries(buyerRows)
+          .filter(([id, r]) => !sellerRows[id]?.units && Number(r.cash) > 0 && Number(r.value) > 0)
+          .map(([id, r]) => [id, { cash: Number(r.cash), value: Number(r.value) }]),
+      );
+      const sellers = Object.fromEntries(
+        Object.entries(sellerRows)
+          .filter(([id, r]) => !buyerRows[id]?.cash && Number(r.units) > 0 && Number(r.cost) >= 0)
+          .map(([id, r]) => [id, { units: Number(r.units), cost: Number(r.cost) }]),
+      );
+      if (Object.keys(buyers).length === 0 || Object.keys(sellers).length === 0) {
+        setError("至少各需要一个买家（现金+估值）和一个卖家（数量+成本）");
+        return;
+      }
+      agentIds = Array.from(new Set([...Object.keys(buyers), ...Object.keys(sellers)]));
+      config = { good, buyers, sellers, rounds };
     }
 
     setSubmitting(true);
@@ -235,6 +258,7 @@ function LaunchWorldTab() {
             <option value="courtroom">法庭</option>
             <option value="collab-build">协作编码（共享工作区）</option>
             <option value="negotiation">谈判/外交（联盟博弈）</option>
+            <option value="market">市场/交易所</option>
           </select>
         </label>
 
@@ -677,6 +701,62 @@ function LaunchWorldTab() {
             </fieldset>
             <p className="muted-cell">
               每轮玩家同时私密选一个结盟对象（<code>pact.offer</code> 只对该二人可见），互选即成盟；最后投票争夺奖品，联盟往往抱团。上帝视角可见全部私密提议与联盟图。
+            </p>
+          </>
+        )}
+
+        {template === "market" && (
+          <>
+            <label>
+              商品
+              <input required value={good} onChange={(e) => setGood(e.target.value)} />
+            </label>
+            <label>
+              交易轮次
+              <input type="number" min={1} max={10} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} />
+            </label>
+            <fieldset>
+              <legend>买家（填现金 + 私密估值即成为买家）</legend>
+              {agents.map((a) => (
+                <div key={a.config.agentId} className="persona-row">
+                  <span style={{ minWidth: 90 }}>{a.config.agentId}</span>
+                  <input
+                    type="number"
+                    placeholder="现金"
+                    value={buyerRows[a.config.agentId]?.cash ?? ""}
+                    onChange={(e) => setBuyerRows({ ...buyerRows, [a.config.agentId]: { ...buyerRows[a.config.agentId], cash: e.target.value } })}
+                  />
+                  <input
+                    type="number"
+                    placeholder="估值/单位"
+                    value={buyerRows[a.config.agentId]?.value ?? ""}
+                    onChange={(e) => setBuyerRows({ ...buyerRows, [a.config.agentId]: { ...buyerRows[a.config.agentId], value: e.target.value } })}
+                  />
+                </div>
+              ))}
+            </fieldset>
+            <fieldset>
+              <legend>卖家（填数量 + 私密成本即成为卖家）</legend>
+              {agents.map((a) => (
+                <div key={a.config.agentId} className="persona-row">
+                  <span style={{ minWidth: 90 }}>{a.config.agentId}</span>
+                  <input
+                    type="number"
+                    placeholder="持有数量"
+                    value={sellerRows[a.config.agentId]?.units ?? ""}
+                    onChange={(e) => setSellerRows({ ...sellerRows, [a.config.agentId]: { ...sellerRows[a.config.agentId], units: e.target.value } })}
+                  />
+                  <input
+                    type="number"
+                    placeholder="成本/单位"
+                    value={sellerRows[a.config.agentId]?.cost ?? ""}
+                    onChange={(e) => setSellerRows({ ...sellerRows, [a.config.agentId]: { ...sellerRows[a.config.agentId], cost: e.target.value } })}
+                  />
+                </div>
+              ))}
+            </fieldset>
+            <p className="muted-cell">
+              双向拍卖：每轮买家出价、卖家要价（数值动作，私密），撮合高买对低卖、按中间价成交，现金与货物在各自持久余额间转移，多轮后价格收敛。每人只知自己的估值/成本。
             </p>
           </>
         )}

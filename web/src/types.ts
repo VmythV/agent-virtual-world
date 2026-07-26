@@ -47,7 +47,8 @@ export type CliInvocationConfig =
 export type AgentConfig =
   | { agentId: string; adapter: "api"; systemPrompt: string; model?: string }
   | { agentId: string; adapter: "mock"; responses: string[] }
-  | { agentId: string; adapter: "cli"; cli: CliInvocationConfig };
+  | { agentId: string; adapter: "cli"; cli: CliInvocationConfig }
+  | { agentId: string; adapter: "human" };
 
 /** Mirrors src/core/agentStore.ts. */
 export interface StoredAgent {

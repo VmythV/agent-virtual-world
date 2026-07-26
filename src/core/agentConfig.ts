@@ -19,13 +19,19 @@ export interface MockAgentConfig {
   responses: string[];
 }
 
+/** A seat played by the human via the UI: act() waits for a decision to be submitted. */
+export interface HumanAgentConfig {
+  agentId: string;
+  adapter: "human";
+}
+
 export interface CliAgentConfig {
   agentId: string;
   adapter: "cli";
   cli: CliInvocationConfig;
 }
 
-export type AgentConfig = ApiAgentConfig | MockAgentConfig | CliAgentConfig;
+export type AgentConfig = ApiAgentConfig | MockAgentConfig | CliAgentConfig | HumanAgentConfig;
 
 export type CliInvocationConfig =
   | {

@@ -75,7 +75,7 @@ function rowToAgent(row: AgentRow): StoredAgent {
   return { config: JSON.parse(row.config) as AgentConfig, createdAt: row.created_at, updatedAt: row.updated_at };
 }
 
-const ADAPTERS = new Set(["api", "mock", "cli"]);
+const ADAPTERS = new Set(["api", "mock", "cli", "human"]);
 const CLI_PRESETS = new Set(["claude-code", "custom"]);
 
 export function validateAgentConfig(config: AgentConfig): void {

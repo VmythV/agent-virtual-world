@@ -81,3 +81,14 @@ export async function deleteWorld(worldId: string): Promise<void> {
   const body = await res.json().catch(() => undefined);
   throw new Error((body && body.error) || `request failed: ${res.status}`);
 }
+
+/** Submits a human-played seat's decision, unblocking its turn. */
+export async function submitDecision(worldId: string, agentId: string, response: string): Promise<void> {
+  await handleJson(
+    await fetch(`/api/worlds/${worldId}/decisions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentId, response }),
+    }),
+  );
+}

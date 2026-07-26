@@ -13,6 +13,7 @@ import { runWorld } from "../engine/scheduler.js";
 import type { RuntimePool } from "../runtime/runtimePool.js";
 import type { AgentAdapter, WorldEvent } from "../core/types.js";
 import type { AgentConfig } from "../core/agentConfig.js";
+import { HumanDecisionHub } from "../adapters/HumanAgentAdapter.js";
 
 export interface AppDeps {
   eventLog: EventLog;
@@ -30,6 +31,8 @@ export async function buildServer(deps: AppDeps): Promise<FastifyInstance> {
   // Abort controllers for worlds currently running in memory, so they can be
   // stopped/deleted mid-run.
   const running = new Map<string, AbortController>();
+  // Coordinates turns played by a human via the UI.
+  const humanHub = new HumanDecisionHub(eventLog);
 
   await app.register(cors, { origin: true });
   await app.register(websocketPlugin);
@@ -133,7 +136,7 @@ export async function buildServer(deps: AppDeps): Promise<FastifyInstance> {
       if (!stored) {
         return reply.code(400).send({ error: `agent "${agentId}" not found` });
       }
-      agents.set(agentId, createAgentAdapter(stored.config, { cliPool }));
+      agents.set(agentId, createAgentAdapter(stored.config, { cliPool, humanHub }));
     }
 
     const worldId = randomUUID();
@@ -167,6 +170,7 @@ export async function buildServer(deps: AppDeps): Promise<FastifyInstance> {
     const controller = running.get(id);
     if (!controller) return reply.code(409).send({ error: `world "${id}" is not running` });
     controller.abort();
+    humanHub.cancelWorld(id); // unblock a turn that's waiting on a human
     return reply.code(202).send({ id, status: "stopping" });
   });
 
@@ -174,10 +178,24 @@ export async function buildServer(deps: AppDeps): Promise<FastifyInstance> {
     const { id } = req.params as { id: string };
     if (!worldStore.get(id)) return reply.code(404).send({ error: `world "${id}" not found` });
     running.get(id)?.abort(); // stop it first if still running
+    humanHub.cancelWorld(id);
     running.delete(id);
     worldStore.remove(id);
     eventLog.deleteWorld(id);
     return reply.code(204).send();
+  });
+
+  // A human seat submits its decision here; the blocked turn then resumes.
+  app.post("/api/worlds/:id/decisions", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as { agentId?: string; response?: string };
+    if (!body.agentId || typeof body.response !== "string") {
+      return reply.code(400).send({ error: "agentId and response are required" });
+    }
+    if (!humanHub.submit(id, body.agentId, body.response)) {
+      return reply.code(409).send({ error: `no pending decision for "${body.agentId}" in world "${id}"` });
+    }
+    return reply.code(202).send({ ok: true });
   });
 
   // --- Live event feed -----------------------------------------------------

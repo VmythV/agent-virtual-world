@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { AgentVisualState, WorldEvent, WorldSummary, WsMessage } from "./types";
-import { deleteWorld, fetchWorlds, sendInstruction, stopWorld } from "./api";
+import { deleteWorld, fetchWorlds, sendInstruction, stopWorld, submitDecision } from "./api";
 import { Stage3D } from "./Stage3D";
 import { Aquarium3D } from "./Aquarium3D";
 import { Ecosystem3D } from "./Ecosystem3D";
@@ -38,6 +38,8 @@ function WorldView() {
   const [instrTarget, setInstrTarget] = useState("");
   const [instrText, setInstrText] = useState("");
   const [instrSending, setInstrSending] = useState(false);
+  const [pendingDecision, setPendingDecision] = useState<{ agentId: string; visibleState: Record<string, unknown> } | undefined>();
+  const [decisionText, setDecisionText] = useState("");
   const [replay, setReplay] = useState(false);
   const [cursor, setCursor] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -70,6 +72,7 @@ function WorldView() {
     setRoundLabel(undefined);
     setAquarium(undefined);
     setEcosystem(undefined);
+    setPendingDecision(undefined);
     setReplay(false);
     setPlaying(false);
     setCursor(0);
@@ -123,8 +126,16 @@ function WorldView() {
             const lastRound = [...data.events].reverse().find((e) => e.type === "round.start" || e.type === "phase.start");
             if (lastRound) setRoundLabel(formatRoundLabel(lastRound));
           }
+          // If the world is currently waiting on a human, prompt for it.
+          const last = data.events[data.events.length - 1];
+          if (last?.type === "decision.requested" && last.actorId) {
+            setPendingDecision({ agentId: last.actorId, visibleState: last.payload.visibleState as Record<string, unknown> });
+          }
         } else {
           setEvents((prev) => [...prev, data.event]);
+          if (data.event.type === "decision.requested" && data.event.actorId) {
+            setPendingDecision({ agentId: data.event.actorId, visibleState: data.event.payload.visibleState as Record<string, unknown> });
+          }
           if (data.event.type === "world.tick") {
             const p = data.event.payload;
             if ("fish" in p) {
@@ -245,6 +256,18 @@ function WorldView() {
       console.error(err);
     } finally {
       setInstrSending(false);
+    }
+  }
+
+  async function handleSubmitDecision(response: string) {
+    if (!worldId || !pendingDecision) return;
+    const agentId = pendingDecision.agentId;
+    setPendingDecision(undefined);
+    setDecisionText("");
+    try {
+      await submitDecision(worldId, agentId, response);
+    } catch (err) {
+      console.error(err);
     }
   }
 
@@ -372,6 +395,8 @@ function WorldView() {
               </form>
             )}
 
+            {pendingDecision && <DecisionPanel decision={pendingDecision} text={decisionText} setText={setDecisionText} onSubmit={handleSubmitDecision} />}
+
             {replay && (
               <div className="replay-bar">
                 <button onClick={() => setPlaying((p) => !p)}>{playing ? "⏸" : "▶"}</button>
@@ -436,6 +461,61 @@ function WorldView() {
           <div className="empty-state">选择左侧的一个世界查看</div>
         )}
       </main>
+    </div>
+  );
+}
+
+function DecisionPanel({
+  decision,
+  text,
+  setText,
+  onSubmit,
+}: {
+  decision: { agentId: string; visibleState: Record<string, unknown> };
+  text: string;
+  setText: (v: string) => void;
+  onSubmit: (response: string) => void;
+}) {
+  const vs = decision.visibleState;
+  const shape = (vs.responseShape as string) ?? "text";
+  const choices = (vs.choices as string[] | undefined) ?? [];
+  // Show the observation context minus the plumbing fields.
+  const context = Object.fromEntries(
+    Object.entries(vs).filter(([k]) => !["responseShape", "choices", "expectedActionType"].includes(k)),
+  );
+  return (
+    <div className="decision-panel">
+      <div className="decision-head">
+        🎮 轮到你了（<strong>{decision.agentId}</strong>）· {(vs.expectedActionType as string) ?? "act"}
+      </div>
+      <div className="decision-context">{JSON.stringify(context)}</div>
+      {shape === "choice" ? (
+        <div className="decision-choices">
+          {choices.map((c) => (
+            <button key={c} onClick={() => onSubmit(c)}>
+              {c}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <form
+          className="decision-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (text.trim()) onSubmit(text.trim());
+          }}
+        >
+          <input
+            autoFocus
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={shape === "number" ? "输入一个数字…" : "输入你的发言/行动…"}
+          />
+          <button type="submit" disabled={!text.trim()}>
+            提交
+          </button>
+        </form>
+      )}
     </div>
   );
 }

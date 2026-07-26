@@ -372,6 +372,58 @@
   border-color: var(--err);
 }
 
+.decision-panel {
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--accent);
+  background: var(--accent-bg);
+}
+
+.decision-head {
+  font-size: 13px;
+  color: var(--text-h);
+  margin-bottom: 6px;
+}
+
+.decision-context {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+
+.decision-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.decision-choices button,
+.decision-form button {
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.decision-form {
+  display: flex;
+  gap: 8px;
+}
+
+.decision-form input {
+  flex: 1;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
 .world-banner {
   padding: 8px 20px;
   font-size: 13px;

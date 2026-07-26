@@ -3,11 +3,14 @@ import type { AgentConfig, CliInvocationConfig } from "./agentConfig.js";
 import { ApiAgentAdapter } from "../adapters/ApiAgentAdapter.js";
 import { MockAgentAdapter } from "../adapters/MockAgentAdapter.js";
 import { CliAgentAdapter } from "../adapters/CliAgentAdapter.js";
+import { HumanAgentAdapter, type HumanDecisionHub } from "../adapters/HumanAgentAdapter.js";
 import { RuntimePool } from "../runtime/runtimePool.js";
 
 export interface AgentFactoryDeps {
   /** Shared across every CLI-backed agent so they compete for one concurrency/budget limit. */
   cliPool: RuntimePool;
+  /** Required to build "human" seats; the running server provides it. */
+  humanHub?: HumanDecisionHub;
 }
 
 /** Strategy factory: turns a declarative AgentConfig into a live AgentAdapter. */
@@ -24,6 +27,10 @@ export function createAgentAdapter(config: AgentConfig, deps: AgentFactoryDeps):
     case "cli": {
       const { command, args } = resolveCliInvocation(config.cli);
       return new CliAgentAdapter({ agentId: config.agentId, command, args, pool: deps.cliPool });
+    }
+    case "human": {
+      if (!deps.humanHub) throw new Error('createAgentAdapter: "human" agents require a humanHub in deps');
+      return new HumanAgentAdapter(config.agentId, deps.humanHub);
     }
   }
 }

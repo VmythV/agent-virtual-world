@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { AgentConfig, StoredAgent } from "../types";
 import { createAgent, deleteAgent, listAgents, updateAgent } from "../api";
 
-type Adapter = "api" | "mock" | "cli";
+type Adapter = "api" | "mock" | "cli" | "human";
 type CliPreset = "claude-code" | "custom";
 
 interface FormState {
@@ -149,6 +149,7 @@ function AgentsTab() {
               <option value="mock">mock（免费、确定性，用于测试）</option>
               <option value="api">api（直接调用 Anthropic API）</option>
               <option value="cli">cli（拉起 Coding Agent CLI 进程）</option>
+              <option value="human">human（由你在展示侧亲自操作这个席位）</option>
             </select>
           </label>
 
@@ -281,6 +282,9 @@ function configToForm(config: AgentConfig): FormState {
   if (config.adapter === "api") {
     return { ...EMPTY_FORM, agentId: config.agentId, adapter: "api", systemPrompt: config.systemPrompt, model: config.model ?? "" };
   }
+  if (config.adapter === "human") {
+    return { ...EMPTY_FORM, agentId: config.agentId, adapter: "human" };
+  }
   if (config.adapter === "mock") {
     return { ...EMPTY_FORM, agentId: config.agentId, adapter: "mock", responsesText: config.responses.join("\n") };
   }
@@ -309,6 +313,9 @@ function configToForm(config: AgentConfig): FormState {
 function formToConfig(form: FormState): AgentConfig {
   if (form.adapter === "api") {
     return { agentId: form.agentId, adapter: "api", systemPrompt: form.systemPrompt, model: form.model || undefined };
+  }
+  if (form.adapter === "human") {
+    return { agentId: form.agentId, adapter: "human" };
   }
   if (form.adapter === "mock") {
     return {
@@ -351,6 +358,7 @@ function relativeScriptArgs(argsText: string): string[] {
 
 function summarize(config: AgentConfig): string {
   if (config.adapter === "api") return config.systemPrompt.slice(0, 60);
+  if (config.adapter === "human") return "由人类在展示侧操作";
   if (config.adapter === "mock") return `${config.responses.length} 条固定回复`;
   if (config.cli.preset === "claude-code") return `claude-code, model=${config.cli.model ?? "默认"}`;
   return `custom: ${config.cli.command} ${(config.cli.args ?? []).join(" ")}`;

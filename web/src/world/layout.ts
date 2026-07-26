@@ -32,7 +32,10 @@ export type StageRole =
   | "member"
   | "solver"
   | "researcher"
-  | "lead";
+  | "lead"
+  | "legislator"
+  | "speaker"
+  | "trader";
 
 export interface AgentPlacement {
   agentId: string;
@@ -236,6 +239,35 @@ export function resolveResearchLayout(worldCreatedPayload: Record<string, unknow
   return placements;
 }
 
+/** Parliament: legislators sit in a chamber semicircle, the speaker upstage center. */
+export function resolveParliamentLayout(worldCreatedPayload: Record<string, unknown> | undefined): AgentPlacement[] {
+  if (!worldCreatedPayload) return [];
+  const members = (worldCreatedPayload.members as string[] | undefined) ?? [];
+  const speaker = worldCreatedPayload.speaker as string | undefined;
+  const placements: AgentPlacement[] = [];
+  const radius = 3.4;
+  members.forEach((agentId, i) => {
+    const spread = members.length > 1 ? i / (members.length - 1) - 0.5 : 0;
+    const angle = spread * Math.PI * 0.9;
+    placements.push({ agentId, role: "legislator", position: [Math.sin(angle) * radius, 0, -1.5 - Math.cos(angle) * radius * 0.5] });
+  });
+  if (speaker && !members.includes(speaker)) {
+    placements.push({ agentId: speaker, role: "speaker", position: [0, 0, -4.6] });
+  }
+  return placements;
+}
+
+/** Prediction market: buyers on the left, sellers on the right (a trading pit). */
+export function resolvePredictionMarketLayout(worldCreatedPayload: Record<string, unknown> | undefined): AgentPlacement[] {
+  if (!worldCreatedPayload) return [];
+  const buyers = (worldCreatedPayload.buyers as string[] | undefined) ?? [];
+  const sellers = (worldCreatedPayload.sellers as string[] | undefined) ?? [];
+  const placements: AgentPlacement[] = [];
+  buyers.forEach((agentId, i) => placements.push({ agentId, role: "buyer", position: [-2.8, 0, -1 - i * 1.6] }));
+  sellers.forEach((agentId, i) => placements.push({ agentId, role: "seller", position: [2.8, 0, -1 - i * 1.6] }));
+  return placements;
+}
+
 /** Dispatches to the right layout by which keys are present — no template name needed. */
 export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   const created = history.find((e) => e.type === "world.created");
@@ -246,7 +278,10 @@ export function resolveStageLayout(history: WorldEvent[]): AgentPlacement[] {
   if ("participants" in created.payload) return resolveDiscussionLayout(created.payload);
   if ("experts" in created.payload) return resolveProblemLayout(created.payload);
   if ("bidders" in created.payload) return resolveAuctionLayout(created.payload);
+  // prediction-market also has "buyers"/"sellers"; check its distinctive "event" first.
+  if ("event" in created.payload) return resolvePredictionMarketLayout(created.payload);
   if ("buyers" in created.payload) return resolveMarketLayout(created.payload);
+  if ("bill" in created.payload) return resolveParliamentLayout(created.payload);
   if ("prosecutor" in created.payload) return resolveCourtroomLayout(created.payload);
   if ("builders" in created.payload && "task" in created.payload) return resolveCollabLayout(created.payload);
   // negotiation also has "players", so check its distinctive "prize" first.

@@ -53,4 +53,18 @@ describe("resolveStageLayout dispatch (frontend)", () => {
     const p = resolveStageLayout([ev("world.created", { players: ["w1", "v1"] })]);
     expect(p.every((x) => x.role === "other")).toBe(true);
   });
+
+  it("parliament: members are 'legislator', speaker is 'speaker'", () => {
+    const p = resolveStageLayout([ev("world.created", { bill: "B", members: ["a", "b"], speaker: "s" })]);
+    expect(p.filter((x) => x.role === "legislator").map((x) => x.agentId)).toEqual(["a", "b"]);
+    expect(p.find((x) => x.role === "speaker")!.agentId).toBe("s");
+  });
+
+  it("prediction-market wins over market via distinctive 'event' key; buyers left, sellers right", () => {
+    const p = resolveStageLayout([ev("world.created", { event: "E", buyers: ["b1"], sellers: ["s1"] })]);
+    expect(p.find((x) => x.agentId === "b1")!.role).toBe("buyer");
+    expect(p.find((x) => x.agentId === "b1")!.position[0]).toBeLessThan(0);
+    expect(p.find((x) => x.agentId === "s1")!.role).toBe("seller");
+    expect(p.find((x) => x.agentId === "s1")!.position[0]).toBeGreaterThan(0);
+  });
 });

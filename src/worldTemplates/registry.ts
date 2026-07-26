@@ -14,6 +14,8 @@ import { marketWorldTemplate } from "./marketWorldTemplate.js";
 import { escapeRoomWorldTemplate } from "./escapeRoomWorldTemplate.js";
 import { researchWorldTemplate } from "./researchWorldTemplate.js";
 import { reproductionWorldTemplate } from "./reproductionWorldTemplate.js";
+import { parliamentWorldTemplate } from "./parliamentWorldTemplate.js";
+import { predictionMarketWorldTemplate } from "./predictionMarketWorldTemplate.js";
 
 export const worldTemplates: Record<string, WorldTemplate<WorldState>> = {
   debate: debateWorldTemplate as unknown as WorldTemplate<WorldState>,
@@ -31,6 +33,8 @@ export const worldTemplates: Record<string, WorldTemplate<WorldState>> = {
   "escape-room": escapeRoomWorldTemplate as unknown as WorldTemplate<WorldState>,
   research: researchWorldTemplate as unknown as WorldTemplate<WorldState>,
   reproduction: reproductionWorldTemplate as unknown as WorldTemplate<WorldState>,
+  parliament: parliamentWorldTemplate as unknown as WorldTemplate<WorldState>,
+  "prediction-market": predictionMarketWorldTemplate as unknown as WorldTemplate<WorldState>,
 };
 
 export function getWorldTemplate(id: string): WorldTemplate<WorldState> | undefined {

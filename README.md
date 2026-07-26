@@ -11,7 +11,7 @@ One engine, swappable **world templates** — debate, discussion, werewolf, aqua
 ## What it does
 
 - **Plug in any Agent**: a strategy factory unifies "LLM API / CLI process / mock" behind one `AgentAdapter` interface. The CLI adapter can spawn a real `claude -p` non-interactive session, with bounded concurrency/timeout/budget and a fresh sandbox directory per call — or a persistent shared workspace when the world needs agents to collaborate on real files.
-- **15 world templates**: debate, discussion, werewolf (hidden information), aquarium (continuous simulation), problem-solving (tool orchestration), human-lab (private personas), auction (sealed numeric bids), ecosystem (predator-prey), courtroom, collaborative-build (shared git workspace), negotiation (private coalitions), market (double auction), escape-room (asymmetric clues), research (tool-using agents), reproduction (agents created at runtime). Adding a template requires no engine changes.
+- **17 world templates**: debate, discussion, werewolf (hidden information), aquarium (continuous simulation), problem-solving (tool orchestration), human-lab (private personas), auction (sealed numeric bids), ecosystem (predator-prey), courtroom, collaborative-build (shared git workspace), negotiation (private coalitions), market (double auction), escape-room (asymmetric clues), research (tool-using agents), reproduction (agents created at runtime), parliament (bill vote), prediction-market (implied-probability trading). Adding a template requires no engine changes.
 - **Run control**: stop or delete a running world; the server reconciles worlds orphaned by a crash/restart back to `failed` on startup.
 - **Two scheduling modes**: turn-based (wait for agents one at a time or in batches) and tick-based (advance continuously on a wall clock). Multiple agents can decide concurrently.
 - **Hidden information**: werewolves' night kills and the seer's inspection results are invisible to other agents, while the human "god" always sees everything.
@@ -96,6 +96,8 @@ flowchart TB
 | `escape-room` | turn-based | Each member privately holds one clue; they must combine them to escape (cooperative) | `npm run demo:escape` |
 | `research` | turn-based | Tool-using researcher agents investigate a question; a lead synthesizes findings | `npm run demo:research` |
 | `reproduction` | tick-based | Creatures graze, reproduce into brand-new agent ids at runtime, and starve — exercises dynamic agent lifecycle | `npm run demo:reproduction` |
+| `parliament` | turn-based | Legislators caucus into private blocs, then vote a bill up or down (reskin of the coalition game) | `npm run demo:parliament` |
+| `prediction-market` | turn-based | Traders buy/sell YES contracts on a binary event; the clearing price is the implied probability, settled at resolution (reskin of the double auction) | `npm run demo:prediction` |
 
 Other demos: `npm run demo:god` (instruction delivery / once-only / no leak), `npm run demo:concurrency` (proof of concurrent multi-agent decisions). Every demo is pure mock — free and runnable offline. `npm test` runs the vitest suite.
 
@@ -143,7 +145,7 @@ src/
   adapters/        ApiAgentAdapter / CliAgentAdapter / MockAgentAdapter
   runtime/         RuntimePool (concurrency/timeout/budget), process runner, sandbox
   engine/          scheduler: turn-based / tick-based / concurrent batches / god-instruction delivery
-  worldTemplates/  the 5 world templates + registry
+  worldTemplates/  the 17 world templates + registry
   server/          Fastify: REST + WebSocket + background world runs
   demo/            6 offline, runnable validation scripts
 web/

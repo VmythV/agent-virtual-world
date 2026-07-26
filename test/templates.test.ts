@@ -219,6 +219,83 @@ describe("market template — double auction, conservation", () => {
   });
 });
 
+describe("parliament template (reskin) — private whips + bill vote", () => {
+  it("forms a bloc on mutual picks, passes the bill on majority, keeps whips private", async () => {
+    const carol = new MockAgentAdapter({ agentId: "carol", responses: ["alice", "alice", "no"] });
+    const events = await run(
+      "parliament",
+      { bill: "B", members: ["alice", "bob", "carol"], stances: { carol: "反对" }, rounds: 2 },
+      new Map<string, AgentAdapter>([
+        ["alice", mock("alice", ["bob", "bob", "yes"])],
+        ["bob", mock("bob", ["alice", "alice", "yes"])],
+        ["carol", carol],
+      ]),
+    );
+    const blocs = events.filter((e) => e.type === "bloc.formed");
+    expect(blocs).toHaveLength(1);
+    expect((blocs[0].payload.between as string[]).slice().sort()).toEqual(["alice", "bob"]);
+    const verdict = events.find((e) => e.type === "world.verdict")!;
+    expect(verdict.payload.passed).toBe(true);
+    expect(verdict.payload.tally).toEqual({ yes: 2, no: 1, abstain: 0 });
+    // carol never saw alice's private whip to bob.
+    expect(
+      carol.lastObservation!.history.some((e: WorldEvent) => e.type === "whip.offer" && e.actorId === "alice"),
+    ).toBe(false);
+  });
+
+  it("fails the bill when no > yes", async () => {
+    const events = await run(
+      "parliament",
+      { bill: "B", members: ["a", "b", "c"], rounds: 1 },
+      new Map<string, AgentAdapter>([
+        ["a", mock("a", ["b", "no"])],
+        ["b", mock("b", ["a", "no"])],
+        ["c", mock("c", ["a", "yes"])],
+      ]),
+    );
+    expect(events.find((e) => e.type === "world.verdict")!.payload.passed).toBe(false);
+  });
+});
+
+describe("prediction-market template (reskin) — implied probability + resolution", () => {
+  it("clears trades, hides the outcome from traders, settles YES at 100 when true", async () => {
+    const bull = new MockAgentAdapter({ agentId: "bull", responses: ["70", "75"] });
+    const events = await run(
+      "prediction-market",
+      {
+        event: "E",
+        outcome: true,
+        buyers: { bull: { cash: 400, belief: 0.8 }, bull2: { cash: 400, belief: 0.7 } },
+        sellers: { bear: { shares: 3, belief: 0.5 }, bear2: { shares: 3, belief: 0.45 } },
+        rounds: 2,
+      },
+      new Map<string, AgentAdapter>([
+        ["bull", bull],
+        ["bull2", mock("bull2", ["65", "72"])],
+        ["bear", mock("bear", ["60", "62"])],
+        ["bear2", mock("bear2", ["55", "58"])],
+      ]),
+    );
+    expect(events.filter((e) => e.type === "trade.executed").length).toBeGreaterThanOrEqual(1);
+
+    // Cash + contracts conserved during trading (last pre-settlement snapshot).
+    const lastTick = [...events].reverse().find((e) => e.type === "market.tick")!;
+    const bal = lastTick.payload.traders as Array<{ cash: number; shares: number }>;
+    expect(bal.reduce((s, b) => s + b.cash, 0)).toBeCloseTo(800, 3);
+    expect(bal.reduce((s, b) => s + b.shares, 0)).toBe(6);
+
+    // The true outcome is god-only (visibleTo: []); no trader ever observed it.
+    expect(
+      bull.lastObservation!.history.some((e: WorldEvent) => e.type === "outcome.sealed"),
+    ).toBe(false);
+
+    const finished = events.find((e) => e.type === "world.finished")!;
+    expect(finished.payload.outcome).toBe(true);
+    expect(finished.payload.settlePrice).toBe(100);
+    expect(Array.isArray((finished.payload as { wealth: unknown }).wealth)).toBe(true);
+  });
+});
+
 describe("negotiation template — private pacts + coalition vote", () => {
   it("forms a pact only on mutual picks, keeps offers private, coalition candidate wins", async () => {
     const carol = new MockAgentAdapter({ agentId: "carol", responses: ["alice", "alice", "carol"] });

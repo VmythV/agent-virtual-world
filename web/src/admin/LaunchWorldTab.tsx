@@ -18,7 +18,9 @@ type Template =
   | "market"
   | "escape-room"
   | "research"
-  | "reproduction";
+  | "reproduction"
+  | "parliament"
+  | "prediction-market";
 
 function LaunchWorldTab() {
   const navigate = useNavigate();
@@ -100,6 +102,18 @@ function LaunchWorldTab() {
   const [founders, setFounders] = useState<string[]>([]);
   const [repTicks, setRepTicks] = useState(80);
   const [maxPopulation, setMaxPopulation] = useState(40);
+
+  // parliament-only
+  const [bill, setBill] = useState("《远程办公保障法》");
+  const [members, setMembers] = useState<string[]>([]);
+  const [stances, setStances] = useState<Record<string, string>>({});
+  const [speaker, setSpeaker] = useState("");
+
+  // prediction-market-only
+  const [event, setEvent] = useState("下季度产品会如期发布吗？");
+  const [outcome, setOutcome] = useState(true);
+  const [pmBuyerRows, setPmBuyerRows] = useState<Record<string, { cash: string; belief: string }>>({});
+  const [pmSellerRows, setPmSellerRows] = useState<Record<string, { shares: string; belief: string }>>({});
 
   const [error, setError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
@@ -261,6 +275,33 @@ function LaunchWorldTab() {
       }
       agentIds = founders;
       config = { founders, ticks: repTicks, maxPopulation };
+    } else if (template === "parliament") {
+      if (members.length < 3) {
+        setError("议会至少需要 3 名议员才有党团博弈");
+        return;
+      }
+      const stanceMap = Object.fromEntries(
+        Object.entries(stances).filter(([id, v]) => members.includes(id) && v.trim()).map(([id, v]) => [id, v.trim()]),
+      );
+      agentIds = Array.from(new Set([...members, ...(speaker ? [speaker] : [])]));
+      config = { bill, members, stances: stanceMap, speaker: speaker || undefined, rounds };
+    } else if (template === "prediction-market") {
+      const buyers = Object.fromEntries(
+        Object.entries(pmBuyerRows)
+          .filter(([id, r]) => !pmSellerRows[id]?.shares && Number(r.cash) > 0 && Number(r.belief) >= 0)
+          .map(([id, r]) => [id, { cash: Number(r.cash), belief: Number(r.belief) }]),
+      );
+      const sellers = Object.fromEntries(
+        Object.entries(pmSellerRows)
+          .filter(([id, r]) => !pmBuyerRows[id]?.cash && Number(r.shares) > 0 && Number(r.belief) >= 0)
+          .map(([id, r]) => [id, { shares: Number(r.shares), belief: Number(r.belief) }]),
+      );
+      if (Object.keys(buyers).length === 0 || Object.keys(sellers).length === 0) {
+        setError("至少各需要一个买家（现金+信念）和一个卖家（合约数+信念）");
+        return;
+      }
+      agentIds = Array.from(new Set([...Object.keys(buyers), ...Object.keys(sellers)]));
+      config = { event, outcome, buyers, sellers, rounds };
     } else {
       const rs = researchers.filter((id) => id !== leadAgent);
       if (rs.length === 0 || !leadAgent) {
@@ -306,6 +347,8 @@ function LaunchWorldTab() {
             <option value="escape-room">密室逃脱（非对称线索）</option>
             <option value="research">研究/工具调用</option>
             <option value="reproduction">繁殖/种群（运行时动态生成 Agent）</option>
+            <option value="parliament">议会（法案表决 · 换皮自联盟博弈）</option>
+            <option value="prediction-market">预测市场（事件概率 · 换皮自双向拍卖）</option>
           </select>
         </label>
 
@@ -915,6 +958,119 @@ function LaunchWorldTab() {
             </label>
             <p className="muted-cell">
               首个「运行时动态生成 Agent」的场景，补上引擎最后一块生命周期能力：生物觅食积累能量，能量够高就分裂出<strong>一个全新 id 的后代</strong>（一个在世界创建时并未注册的 Agent，靠调度器的 <code>defaultAgent</code> 兜底决策），能量耗尽则饿死。种群随之涨落，直到灭绝、触顶或 tick 用尽。复用生态的 3D 渲染（绿色个体）。
+            </p>
+          </>
+        )}
+
+        {template === "parliament" && (
+          <>
+            <label>
+              法案
+              <input required value={bill} onChange={(e) => setBill(e.target.value)} />
+            </label>
+            <label>
+              党团串联轮次
+              <input type="number" min={1} max={5} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} />
+            </label>
+            <fieldset>
+              <legend>议员（≥3 才有党团博弈）</legend>
+              {agents
+                .filter((a) => a.config.agentId !== speaker)
+                .map((a) => (
+                  <div key={a.config.agentId} className="persona-row">
+                    <label className="checkbox-row" style={{ minWidth: 150 }}>
+                      <input
+                        type="checkbox"
+                        checked={members.includes(a.config.agentId)}
+                        onChange={() => toggle(members, setMembers, a.config.agentId)}
+                      />
+                      {a.config.agentId} <span className="muted-cell">({a.config.adapter})</span>
+                    </label>
+                    <input
+                      value={stances[a.config.agentId] ?? ""}
+                      onChange={(e) => setStances({ ...stances, [a.config.agentId]: e.target.value })}
+                      placeholder="私密立场（可留空），如「支持/反对」"
+                    />
+                  </div>
+                ))}
+            </fieldset>
+            <label>
+              议长（可选，居中主持，不参与表决）
+              <select value={speaker} onChange={(e) => setSpeaker(e.target.value)}>
+                <option value="">无议长</option>
+                {agents.map((a) => (
+                  <option key={a.config.agentId} value={a.config.agentId}>{a.config.agentId}</option>
+                ))}
+              </select>
+            </label>
+            <p className="muted-cell">
+              换皮自「谈判/外交」的联盟博弈：议员先私密串联党团（<code>whip.offer</code> 仅对该二人可见），互选成团；再对法案投 <code>yes/no/abstain</code>，赞成多于反对即通过。每人只知自己的私密立场，上帝视角可见全部党鞭与党团图。未改动任何引擎能力。
+            </p>
+          </>
+        )}
+
+        {template === "prediction-market" && (
+          <>
+            <label>
+              事件（市场为其定价的二元未来）
+              <input required value={event} onChange={(e) => setEvent(e.target.value)} />
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={outcome} onChange={(e) => setOutcome(e.target.checked)} />
+              真实结果 = 会发生（YES 合约到期结算 100，否则 0）——仅上帝可见，交易者看不到
+            </label>
+            <label>
+              交易轮次
+              <input type="number" min={1} max={10} value={rounds} onChange={(e) => setRounds(Number(e.target.value))} />
+            </label>
+            <fieldset>
+              <legend>买家（填现金 + 私密信念概率 0~1 即成为买家）</legend>
+              {agents.map((a) => (
+                <div key={a.config.agentId} className="persona-row">
+                  <span style={{ minWidth: 90 }}>{a.config.agentId}</span>
+                  <input
+                    type="number"
+                    placeholder="现金"
+                    value={pmBuyerRows[a.config.agentId]?.cash ?? ""}
+                    onChange={(e) => setPmBuyerRows({ ...pmBuyerRows, [a.config.agentId]: { ...pmBuyerRows[a.config.agentId], cash: e.target.value } })}
+                  />
+                  <input
+                    type="number"
+                    step="0.05"
+                    min={0}
+                    max={1}
+                    placeholder="信念 0~1"
+                    value={pmBuyerRows[a.config.agentId]?.belief ?? ""}
+                    onChange={(e) => setPmBuyerRows({ ...pmBuyerRows, [a.config.agentId]: { ...pmBuyerRows[a.config.agentId], belief: e.target.value } })}
+                  />
+                </div>
+              ))}
+            </fieldset>
+            <fieldset>
+              <legend>卖家（填持有合约数 + 私密信念概率即成为卖家）</legend>
+              {agents.map((a) => (
+                <div key={a.config.agentId} className="persona-row">
+                  <span style={{ minWidth: 90 }}>{a.config.agentId}</span>
+                  <input
+                    type="number"
+                    placeholder="持有合约"
+                    value={pmSellerRows[a.config.agentId]?.shares ?? ""}
+                    onChange={(e) => setPmSellerRows({ ...pmSellerRows, [a.config.agentId]: { ...pmSellerRows[a.config.agentId], shares: e.target.value } })}
+                  />
+                  <input
+                    type="number"
+                    step="0.05"
+                    min={0}
+                    max={1}
+                    placeholder="信念 0~1"
+                    value={pmSellerRows[a.config.agentId]?.belief ?? ""}
+                    onChange={(e) => setPmSellerRows({ ...pmSellerRows, [a.config.agentId]: { ...pmSellerRows[a.config.agentId], belief: e.target.value } })}
+                  />
+                </div>
+              ))}
+            </fieldset>
+            <p className="muted-cell">
+              换皮自「市场/交易所」的双向拍卖：买卖 YES 合约，成交价即市场的<strong>隐含概率</strong>；每轮撮合高买低卖、按中间价成交。回合结束后事件按上帝设定的真实结果结算（YES=100 或 0），最终财富揭示谁对未来定价最准。每人只知自己的私密信念，真实结果全程对交易者保密。未改动任何引擎能力。
             </p>
           </>
         )}

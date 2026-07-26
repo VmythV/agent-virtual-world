@@ -40,6 +40,9 @@ const ROLE_COLOR: Record<StageRole, string> = {
   solver: "#f59e0b",
   researcher: "#2dd4bf",
   lead: "#f59e0b",
+  legislator: "#818cf8",
+  speaker: "#f59e0b",
+  trader: "#2dd4bf",
 };
 
 const DEAD_COLOR = "#4b5563";

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { aquariumFromHistory, collectDeadAgentIds, formatRoundLabel, reconstructView } from "../web/src/world/replay";
+import { aquariumFromHistory, collectDeadAgentIds, ecosystemFromHistory, formatRoundLabel, reconstructView } from "../web/src/world/replay";
 import type { WorldEvent } from "../web/src/types";
 
 let seq = 0;
@@ -40,6 +40,33 @@ describe("aquariumFromHistory", () => {
   });
   it("is undefined for non-aquarium worlds", () => {
     expect(aquariumFromHistory([ev("world.created", { sides: { pro: [], con: [] } })])).toBeUndefined();
+  });
+});
+
+describe("ecosystemFromHistory", () => {
+  it("returns the latest creature snapshot for an ecosystem world", () => {
+    const view = ecosystemFromHistory([
+      ev("world.created", { predators: ["fox"], prey: ["rabbit"], field: 10 }),
+      ev("world.tick", { tick: 0, creatures: [{ id: "fox", type: "predator", x: 0, z: 0, energy: 50 }], counts: { predators: 1, prey: 1 } }),
+      ev("world.tick", { tick: 1, creatures: [{ id: "fox", type: "predator", x: 1, z: 1, energy: 47 }], counts: { predators: 1, prey: 0 } }),
+    ]);
+    expect(view?.tick).toBe(1);
+    expect(view?.counts.prey).toBe(0);
+  });
+
+  it("also drives the reproduction sim (world.created carries `founders`)", () => {
+    const view = ecosystemFromHistory([
+      ev("world.created", { founders: ["cell-a"], field: 12 }),
+      ev("world.tick", { tick: 0, creatures: [{ id: "cell-a", type: "prey", x: 0, z: 0, energy: 50 }], counts: { predators: 0, prey: 1 } }),
+      ev("world.tick", { tick: 1, creatures: [{ id: "cell-a", type: "prey", x: 0, z: 0, energy: 56 }, { id: "cell-a-1", type: "prey", x: 1, z: 0, energy: 28 }], counts: { predators: 0, prey: 2 } }),
+    ]);
+    expect(view?.field).toBe(12);
+    expect(view?.tick).toBe(1);
+    expect(view?.creatures.length).toBe(2);
+  });
+
+  it("is undefined for non-population worlds", () => {
+    expect(ecosystemFromHistory([ev("world.created", { sides: { pro: [], con: [] } })])).toBeUndefined();
   });
 });
 

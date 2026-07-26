@@ -14,6 +14,7 @@ import type { RuntimePool } from "../runtime/runtimePool.js";
 import type { AgentAdapter, WorldEvent } from "../core/types.js";
 import type { AgentConfig } from "../core/agentConfig.js";
 import { HumanDecisionHub } from "../adapters/HumanAgentAdapter.js";
+import { MockAgentAdapter } from "../adapters/MockAgentAdapter.js";
 
 export interface AppDeps {
   eventLog: EventLog;
@@ -154,7 +155,10 @@ export async function buildServer(deps: AppDeps): Promise<FastifyInstance> {
     const tickIntervalMs = template.scheduling === "tick-based" ? 150 : undefined;
     const controller = new AbortController();
     running.set(worldId, controller);
-    runWorld({ worldId, template, config: body.config, agents, eventLog, tickIntervalMs, signal: controller.signal })
+    // Shared behaviour for agents a template creates at runtime (offspring in
+    // a reproduction sim) that weren't registered at world creation.
+    const defaultAgent = new MockAgentAdapter({ agentId: "__spawned__", responses: [""] });
+    runWorld({ worldId, template, config: body.config, agents, eventLog, tickIntervalMs, signal: controller.signal, defaultAgent })
       .then(() => (controller.signal.aborted ? worldStore.markStopped(worldId) : worldStore.markFinished(worldId)))
       .catch((err: unknown) => {
         app.log.error(err);

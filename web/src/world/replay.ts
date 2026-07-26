@@ -62,10 +62,16 @@ export function aquariumFromHistory(history: WorldEvent[]): AquariumView | undef
   return { tank, fish, tick };
 }
 
-/** The ecosystem field + the latest creature snapshot in `history` (undefined for non-ecosystem worlds). */
+/**
+ * The ecosystem field + the latest creature snapshot in `history` (undefined
+ * for non-ecosystem worlds). Also drives the reproduction sim, whose tick
+ * snapshots share the same creature shape but whose world.created carries
+ * `founders` instead of `predators`.
+ */
 export function ecosystemFromHistory(history: WorldEvent[]): EcosystemView | undefined {
   const created = history.find((e) => e.type === "world.created");
-  if (!created || !("predators" in created.payload) || !("field" in created.payload)) return undefined;
+  if (!created || !("field" in created.payload)) return undefined;
+  if (!("predators" in created.payload) && !("founders" in created.payload)) return undefined;
   const field = created.payload.field as number;
   const lastTick = [...history].reverse().find((e) => e.type === "world.tick");
   const creatures = (lastTick?.payload.creatures as CreatureSnapshot[] | undefined) ?? [];

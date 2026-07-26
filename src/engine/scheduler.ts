@@ -20,6 +20,12 @@ export interface RunWorldOptions<TState extends WorldState> {
    * steps and runWorld resolves. The caller can then mark the world stopped.
    */
   signal?: AbortSignal;
+  /**
+   * Fallback adapter for actor ids not in `agents` — lets a template create
+   * new agents at runtime (e.g. offspring in a reproduction sim) that all
+   * share one behaviour adapter, without pre-registering every possible id.
+   */
+  defaultAgent?: AgentAdapter;
 }
 
 /**
@@ -139,10 +145,10 @@ async function runStep<TState extends WorldState>(
   deliveredInstructions: Set<string>,
   emitTurnStarted: boolean,
 ): Promise<void> {
-  const { worldId, template, agents, eventLog } = options;
+  const { worldId, template, agents, eventLog, defaultAgent } = options;
 
   const chosen = actorIds.map((actorId) => {
-    const agent = agents.get(actorId);
+    const agent = agents.get(actorId) ?? defaultAgent;
     if (!agent) throw new Error(`runWorld: no agent adapter registered for actor "${actorId}"`);
     return { actorId, agent };
   });

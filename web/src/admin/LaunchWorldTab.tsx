@@ -17,7 +17,8 @@ type Template =
   | "negotiation"
   | "market"
   | "escape-room"
-  | "research";
+  | "research"
+  | "reproduction";
 
 function LaunchWorldTab() {
   const navigate = useNavigate();
@@ -94,6 +95,11 @@ function LaunchWorldTab() {
   const [question, setQuestion] = useState("某项技术的可行性如何？");
   const [researchers, setResearchers] = useState<string[]>([]);
   const [leadAgent, setLeadAgent] = useState("");
+
+  // reproduction-only
+  const [founders, setFounders] = useState<string[]>([]);
+  const [repTicks, setRepTicks] = useState(80);
+  const [maxPopulation, setMaxPopulation] = useState(40);
 
   const [error, setError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
@@ -248,6 +254,13 @@ function LaunchWorldTab() {
       }
       agentIds = Array.from(new Set([...Object.keys(clueMap), solverAgent]));
       config = { puzzle, solution, clues: clueMap, solver: solverAgent, rounds };
+    } else if (template === "reproduction") {
+      if (founders.length === 0) {
+        setError("至少需要一个初代生物");
+        return;
+      }
+      agentIds = founders;
+      config = { founders, ticks: repTicks, maxPopulation };
     } else {
       const rs = researchers.filter((id) => id !== leadAgent);
       if (rs.length === 0 || !leadAgent) {
@@ -292,6 +305,7 @@ function LaunchWorldTab() {
             <option value="market">市场/交易所</option>
             <option value="escape-room">密室逃脱（非对称线索）</option>
             <option value="research">研究/工具调用</option>
+            <option value="reproduction">繁殖/种群（运行时动态生成 Agent）</option>
           </select>
         </label>
 
@@ -872,6 +886,35 @@ function LaunchWorldTab() {
             </fieldset>
             <p className="muted-cell">
               首个需要「真实外部 I/O」的场景：研究员应使用开启工具的 CLI Agent（在 Agent 管理里给 claude-code 预设勾选「允许工具」），去真正搜索/读写/执行查证问题，lead 最后汇总。
+            </p>
+          </>
+        )}
+
+        {template === "reproduction" && (
+          <>
+            <fieldset>
+              <legend>初代生物（每个是一个 Agent；后代在运行时动态生成）</legend>
+              {agents.map((a) => (
+                <label key={a.config.agentId} className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={founders.includes(a.config.agentId)}
+                    onChange={() => toggle(founders, setFounders, a.config.agentId)}
+                  />
+                  {a.config.agentId} <span className="muted-cell">({a.config.adapter})</span>
+                </label>
+              ))}
+            </fieldset>
+            <label>
+              总 tick 数
+              <input type="number" min={10} max={300} value={repTicks} onChange={(e) => setRepTicks(Number(e.target.value))} />
+            </label>
+            <label>
+              种群上限
+              <input type="number" min={2} max={200} value={maxPopulation} onChange={(e) => setMaxPopulation(Number(e.target.value))} />
+            </label>
+            <p className="muted-cell">
+              首个「运行时动态生成 Agent」的场景，补上引擎最后一块生命周期能力：生物觅食积累能量，能量够高就分裂出<strong>一个全新 id 的后代</strong>（一个在世界创建时并未注册的 Agent，靠调度器的 <code>defaultAgent</code> 兜底决策），能量耗尽则饿死。种群随之涨落，直到灭绝、触顶或 tick 用尽。复用生态的 3D 渲染（绿色个体）。
             </p>
           </>
         )}

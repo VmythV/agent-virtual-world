@@ -97,6 +97,62 @@ describe("concurrent multi-agent decisions (nextActors)", () => {
   });
 });
 
+describe("runtime-created agents (defaultAgent fallback)", () => {
+  it("drives offspring ids that were never registered via the defaultAgent", async () => {
+    const { reproductionWorldTemplate } = await import("../src/worldTemplates/reproductionWorldTemplate.js");
+    const log = new EventLog(new DatabaseSync(":memory:"));
+
+    let fallbackCalls = 0;
+    class CountingFallback implements AgentAdapter {
+      readonly agentId = "__spawned__";
+      async act(o: Observation): Promise<AgentAction> {
+        fallbackCalls += 1;
+        // Offspring ids must resolve to the fallback, never the founders.
+        expect(founders).not.toContain(o.agentId);
+        return { type: "act", payload: { target: "graze" } };
+      }
+    }
+
+    const founders = ["cell-a", "cell-b"];
+    const events = await runWorld({
+      worldId: "w",
+      template: reproductionWorldTemplate,
+      config: { founders, ticks: 60, field: 12, maxPopulation: 20 },
+      agents: new Map<string, AgentAdapter>(
+        founders.map((id) => [id, new MockAgentAdapter({ agentId: id, responses: ["graze"] })]),
+      ),
+      eventLog: log,
+      defaultAgent: new CountingFallback(),
+    });
+
+    const births = events.filter((e) => e.type === "birth.event");
+    // Reproduction must occur (else there's no runtime-created agent to test)…
+    expect(births.length).toBeGreaterThanOrEqual(1);
+    // …and at least one offspring must have decided through the fallback.
+    expect(fallbackCalls).toBeGreaterThanOrEqual(1);
+    // Offspring ids are genuinely new, not pre-registered founders.
+    for (const b of births) expect(founders).not.toContain(b.payload.child as string);
+  });
+
+  it("throws when an unknown actor has no defaultAgent to fall back on", async () => {
+    const { reproductionWorldTemplate } = await import("../src/worldTemplates/reproductionWorldTemplate.js");
+    const log = new EventLog(new DatabaseSync(":memory:"));
+    await expect(
+      runWorld({
+        worldId: "w2",
+        template: reproductionWorldTemplate,
+        config: { founders: ["cell-a", "cell-b"], ticks: 60, field: 12, maxPopulation: 20 },
+        agents: new Map<string, AgentAdapter>([
+          ["cell-a", new MockAgentAdapter({ agentId: "cell-a", responses: ["graze"] })],
+          ["cell-b", new MockAgentAdapter({ agentId: "cell-b", responses: ["graze"] })],
+        ]),
+        eventLog: log,
+        // no defaultAgent — the first offspring's turn must blow up
+      }),
+    ).rejects.toThrow(/no agent adapter registered/);
+  });
+});
+
 describe("abort signal", () => {
   it("stops a tick-based world cleanly when aborted", async () => {
     const { aquariumWorldTemplate } = await import("../src/worldTemplates/aquariumWorldTemplate.js");

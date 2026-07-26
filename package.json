@@ -22,6 +22,7 @@
     "demo:market": "tsx src/demo/runMarket.ts",
     "demo:escape": "tsx src/demo/runEscapeRoom.ts",
     "demo:research": "tsx src/demo/runResearch.ts",
+    "demo:reproduction": "tsx src/demo/runReproduction.ts",
     "server": "tsx src/server/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

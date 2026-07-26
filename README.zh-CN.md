@@ -11,7 +11,7 @@
 ## 它能做什么
 
 - **接入任意 Agent**：策略工厂把「大模型 API / CLI 进程 / mock」统一成一个 `AgentAdapter` 接口。CLI 适配器能真的拉起 `claude -p` 非交互会话，并发/超时/预算受控、每次调用独立沙箱目录——或在需要多 Agent 协作改真实文件时切换到共享持久工作区。
-- **14 个世界模板**：辩论、讨论组、狼人杀（隐藏信息）、水族箱（连续模拟）、做题世界（工具编排）、人性实验室（私密性格）、密封拍卖（数值出价）、生态（捕食-猎物）、法庭、协作编码（共享 git 工作区）、谈判外交（私密联盟）、市场（双向拍卖）、密室逃脱（非对称线索）、研究（工具调用）。加新模板不用改引擎。
+- **15 个世界模板**：辩论、讨论组、狼人杀（隐藏信息）、水族箱（连续模拟）、做题世界（工具编排）、人性实验室（私密性格）、密封拍卖（数值出价）、生态（捕食-猎物）、法庭、协作编码（共享 git 工作区）、谈判外交（私密联盟）、市场（双向拍卖）、密室逃脱（非对称线索）、研究（工具调用）、繁殖（运行时动态生成 Agent）。加新模板不用改引擎。
 - **运行控制**：可终止/删除运行中的世界；服务重启时把因崩溃遗留的 running 世界对账为 `failed`。
 - **两种调度**：回合制（等 Agent 逐个/成批响应）与 tick 制（按墙钟节奏连续推进）。多个 Agent 可并发决策。
 - **隐藏信息**：狼人的夜间投票、预言家的查验结果对其他 Agent 不可见，但人类「上帝」永远全知。
@@ -95,6 +95,7 @@ flowchart TB
 | `market` 市场/交易所 | 回合制 | 双向拍卖——买卖双方出数值订单、撮合成交、价格发现 | `npm run demo:market` |
 | `escape-room` 密室逃脱 | 回合制 | 每人私密掌握一条线索，必须拼在一起才能逃脱（合作） | `npm run demo:escape` |
 | `research` 研究 | 回合制 | 开启工具的研究员 Agent 查证问题，lead 汇总结论 | `npm run demo:research` |
+| `reproduction` 繁殖 | tick 制 | 生物觅食、繁殖出全新 id 的后代（运行时动态生成 Agent）、饿死——演示 Agent 生命周期 | `npm run demo:reproduction` |
 
 其它 demo：`npm run demo:god`（上帝指令送达/单次/不泄露）、`npm run demo:concurrency`（多 Agent 并发决策证明）。所有 demo 都是纯 mock、免费、离线可跑。`npm test` 跑 vitest 测试套件。
 
@@ -158,4 +159,4 @@ docs/              architecture.md（架构）、mvp-plan.md（实现记录）
 
 ## 状态
 
-最初设想的全部核心能力都已实现，并用真实运行 + 自动化测试（vitest + GitHub Actions CI）验证：三层架构、策略工厂接入任意 Agent（含真实 Claude Code CLI）、隐藏信息协议、回合/tick 双调度、多 Agent 并发、上帝发号施令、历史回放、运行控制与重启恢复、WebSocket 自动重连、Agent 间私密通信、工具调用型 Agent，以及 14 个世界模板。后续方向（真实 Agent 成本/延迟压测、鉴权/多用户）见 `docs/architecture.md` §5。
+最初设想的全部核心能力都已实现，并用真实运行 + 自动化测试（vitest + GitHub Actions CI）验证：三层架构、策略工厂接入任意 Agent（含真实 Claude Code CLI）、隐藏信息协议、回合/tick 双调度、多 Agent 并发、上帝发号施令、历史回放、运行控制与重启恢复、WebSocket 自动重连、Agent 间私密通信、工具调用型 Agent、运行时动态 Agent 生命周期，以及 15 个世界模板。后续方向（真实 Agent 成本/延迟压测、鉴权/多用户）见 `docs/architecture.md` §5。
